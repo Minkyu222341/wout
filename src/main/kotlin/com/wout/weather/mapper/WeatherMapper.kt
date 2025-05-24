@@ -2,11 +2,11 @@ package com.wout.weather.mapper
 
 import com.wout.weather.dto.response.*
 import com.wout.weather.entity.WeatherData
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.ZoneOffset
 
 /**
  * packageName    : com.wout.weather.mapper
@@ -18,12 +18,18 @@ import java.time.ZoneOffset
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 25. 5. 24.        MinKyu Park       최초 생성
+ * 25. 5. 25.        MinKyu Park       시간대 처리 개선 (설정 가능한 타임존)
  */
 @Component
-class WeatherMapper {
+class WeatherMapper(
+    @Value("\${app.timezone:Asia/Seoul}")
+    private val timezoneString: String
+) {
+
+    private val zoneId: ZoneId by lazy { ZoneId.of(timezoneString) }
 
     /**
-     * WeatherData 엔티티를 WeatherResponseDto로 변환
+     * WeatherData 엔티티를 WeatherResponse로 변환
      */
     fun toResponseDto(weatherData: WeatherData): WeatherResponse {
         return WeatherResponse(
@@ -61,12 +67,7 @@ class WeatherMapper {
             uvIndex = weatherData.uvIndex,
             visibility = weatherData.visibility?.div(1000.0), // 미터를 킬로미터로 변환
             cloudiness = weatherData.cloudiness,
-            dataTime = LocalDateTime.ofEpochSecond(
-                weatherData.dataTimestamp,
-                0,
-                ZoneId.of("Asia/Seoul").rules.getOffset(Instant.ofEpochSecond(weatherData.dataTimestamp))
-            ),
-
+            dataTime = convertTimestampToLocalDateTime(weatherData.dataTimestamp),
             updatedAt = weatherData.updatedAt
         )
     }
@@ -106,10 +107,20 @@ class WeatherMapper {
     private fun createSunInfoDto(weatherData: WeatherData): SunInfoDto? {
         return if (weatherData.sunrise != null && weatherData.sunset != null) {
             SunInfoDto(
-                sunrise = LocalDateTime.ofEpochSecond(weatherData.sunrise ?: 0, 0, ZoneOffset.ofHours(9)),
-                sunset = LocalDateTime.ofEpochSecond(weatherData.sunset ?: 0, 0, ZoneOffset.ofHours(9))
+                sunrise = convertTimestampToLocalDateTime(weatherData.sunrise ?: 0),
+                sunset = convertTimestampToLocalDateTime(weatherData.sunset ?: 0)
             )
         } else null
+    }
+
+    /**
+     * Unix timestamp를 설정된 시간대의 LocalDateTime으로 변환
+     * 서머타임 등 시간대 변경사항을 자동으로 처리
+     */
+    private fun convertTimestampToLocalDateTime(timestamp: Long): LocalDateTime {
+        val instant = Instant.ofEpochSecond(timestamp)
+        val offset = zoneId.rules.getOffset(instant)
+        return LocalDateTime.ofEpochSecond(timestamp, 0, offset)
     }
 
     /**

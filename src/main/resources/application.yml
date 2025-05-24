@@ -1,6 +1,9 @@
 server:
   port: 8888
 
+app:
+  timezone: Asia/Seoul  # 기본값, 필요시 변경 가능
+
 spring:
   profiles:
     include: secret
