@@ -1,0 +1,6 @@
+language: ko
+reviews:
+  request_changes_threshold: optional
+  high_level_summary: true
+  poem: false
+  review_comment_lgtm: false
