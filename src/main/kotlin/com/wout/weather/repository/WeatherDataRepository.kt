@@ -18,7 +18,7 @@ import java.util.*
  * 25. 5. 21.        MinKyu Park       최초 생성
  */
 @Repository
-interface WeatherDataRepository : JpaRepository<WeatherData, Long> {
+interface WeatherDataRepository : JpaRepository<WeatherData, Long> , WeatherDataRepositoryCustom {
 
     /**
      * 특정 시간 이후의 날씨 데이터 조회

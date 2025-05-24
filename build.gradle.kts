@@ -1,9 +1,10 @@
 plugins {
     kotlin("jvm") version "1.9.25"
     kotlin("plugin.spring") version "1.9.25"
-    kotlin("plugin.jpa") version "1.9.25"
-    id("org.springframework.boot") version "3.3.6"
+    id("org.springframework.boot") version "3.3.10"
     id("io.spring.dependency-management") version "1.1.7"
+    kotlin("plugin.jpa") version "1.9.25"
+    kotlin("kapt") version "1.9.25"
 }
 
 group = "com.wout"
@@ -19,39 +20,40 @@ repositories {
     mavenCentral()
 }
 
+val querydslVersion = "5.0.0"
+
 dependencies {
-    // spring
-    implementation("org.springframework.boot:spring-boot-starter")
+    // Spring Boot Starters
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
 
-    // jpa
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-
-    // h2 database (인메모리)
-    runtimeOnly("com.h2database:h2")
-
-    // kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    // Kotlin
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.7.3")
 
-    // feign client
-    implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
+    // Database
+    runtimeOnly("com.h2database:h2")
+    runtimeOnly("com.mysql:mysql-connector-j")
 
-    // swagger / springdoc
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0")
+    // QueryDSL
+    implementation("com.querydsl:querydsl-jpa:$querydslVersion:jakarta")
+    kapt("com.querydsl:querydsl-apt:$querydslVersion:jakarta")
+    kapt("jakarta.annotation:jakarta.annotation-api")
+    kapt("jakarta.persistence:jakarta.persistence-api")
 
-    // test
+    // OpenFeign
+    implementation("org.springframework.cloud:spring-cloud-starter-openfeign:4.1.3")
+
+    // Swagger/OpenAPI
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0")
+
+    // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-// Spring Cloud 버전 관리 - Spring Boot 3.3.6과 호환되는 버전
-dependencyManagement {
-    imports {
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2023.0.1")
-    }
 }
 
 kotlin {
@@ -60,13 +62,38 @@ kotlin {
     }
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
-}
-
-// JPA 엔티티 관련 설정
 allOpen {
     annotation("jakarta.persistence.Entity")
     annotation("jakarta.persistence.MappedSuperclass")
     annotation("jakarta.persistence.Embeddable")
+}
+
+sourceSets {
+    main {
+        kotlin {
+            srcDir("$buildDir/generated/source/kapt/main")
+        }
+    }
+}
+
+// kapt 설정
+kapt {
+    correctErrorTypes = true
+    javacOptions {
+        option("querydsl.entityAccessors", "true")
+    }
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+}
+
+tasks.named("compileKotlin") {
+    dependsOn("kaptKotlin")
+}
+
+tasks.clean {
+    doFirst {
+        delete("$buildDir/generated")
+    }
 }

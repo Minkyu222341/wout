@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import io.swagger.v3.oas.annotations.media.Schema
 
 /**
- * packageName    : com.wout.infra.openweather.dto
- * fileName       : OpenWeatherDto
+ * packageName    : com.wout.infra.openweather.dto.response
+ * fileName       : OpenWeatherResponse
  * author         : MinKyu Park
  * date           : 25. 5. 21.
  * description    : OpenWeather API 응답을 매핑하기 위한 DTO
@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Schema
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 25. 5. 21.        MinKyu Park       최초 생성
+ * 25. 5. 24.        MinKyu Park       Rain, Snow 클래스 추가, 필드명 수정
  */
 @Schema(description = "OpenWeather API 응답")
 data class OpenWeatherResponse(
@@ -29,13 +30,19 @@ data class OpenWeatherResponse(
     val main: Main,
 
     @Schema(description = "가시성 (미터)")
-    val visibility: Int,
+    val visibility: Int? = null,
 
     @Schema(description = "바람 정보")
     val wind: Wind,
 
     @Schema(description = "구름 정보")
     val clouds: Clouds,
+
+    @Schema(description = "강수량 정보")
+    val rain: Rain? = null,
+
+    @Schema(description = "적설량 정보")
+    val snow: Snow? = null,
 
     @Schema(description = "데이터 시간 (Unix timestamp)")
     val dt: Long,
@@ -118,7 +125,7 @@ data class Wind(
     val speed: Double,
 
     @Schema(description = "풍향 (도)", example = "180")
-    val deg: Int,
+    val deg: Int? = null,
 
     @Schema(description = "돌풍 (m/s)", example = "4.2")
     val gust: Double? = null
@@ -128,6 +135,28 @@ data class Wind(
 data class Clouds(
     @Schema(description = "구름량 (%)", example = "25")
     val all: Int
+)
+
+@Schema(description = "강수량 정보")
+data class Rain(
+    @Schema(description = "1시간 강수량 (mm)")
+    @JsonProperty("1h")
+    val oneHour: Double? = null,
+
+    @Schema(description = "3시간 강수량 (mm)")
+    @JsonProperty("3h")
+    val threeHours: Double? = null
+)
+
+@Schema(description = "적설량 정보")
+data class Snow(
+    @Schema(description = "1시간 적설량 (mm)")
+    @JsonProperty("1h")
+    val oneHour: Double? = null,
+
+    @Schema(description = "3시간 적설량 (mm)")
+    @JsonProperty("3h")
+    val threeHours: Double? = null
 )
 
 @Schema(description = "시스템 정보")
