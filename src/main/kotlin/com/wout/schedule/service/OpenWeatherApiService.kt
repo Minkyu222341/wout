@@ -20,11 +20,12 @@ import org.springframework.transaction.annotation.Transactional
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 25. 5. 24.        MinKyu Park       최초 생성
+ * 25. 5. 24.        MinKyu Park       UV Index API 추가
  */
 @Service
 @Transactional
 class OpenWeatherApiService(
-    private val openWeatherClient: OpenWeatherClient,  // 통합 클라이언트 하나만!
+    private val openWeatherClient: OpenWeatherClient,
     private val weatherApiMapper: WeatherApiMapper
 ) {
 
@@ -37,7 +38,7 @@ class OpenWeatherApiService(
      * 외부 API 호출을 통한 날씨 데이터 수집
      */
     fun fetchWeatherData(latitude: Double, longitude: Double, cityName: String): WeatherData {
-        log.info("🌤️ ${cityName} 날씨 데이터 수집 시작")
+        log.info("🌤️ $cityName 날씨 데이터 수집 시작")
         log.info("📍 좌표: lat=$latitude, lon=$longitude")
 
         // 🔍 API 키 확인 (첫 3자만 표시)
@@ -58,7 +59,7 @@ class OpenWeatherApiService(
             val weatherResponse = openWeatherClient.getCurrentWeather(weatherRequest)
             log.info("✅ 날씨 API 응답 성공: ${weatherResponse.name}")
 
-            // 2. 대기질 정보 API 호출 (같은 클라이언트!)
+            // 2. 대기질 정보 API 호출
             val airRequest = AirPollutionApiRequest(
                 lat = latitude,
                 lon = longitude,
@@ -69,20 +70,26 @@ class OpenWeatherApiService(
             val airResponse = openWeatherClient.getAirPollution(airRequest)
             log.info("✅ 대기질 API 응답 성공: AQI=${airResponse.list.firstOrNull()?.main?.aqi}")
 
-            // 3. API 응답을 WeatherData로 변환
+            // 3. UV Index 정보 API 호출
+            log.info("☀️ UV Index API 요청: $cityName")
+            val uvResponse = openWeatherClient.getUVIndex(weatherRequest)
+            log.info("✅ UV Index API 응답 성공: UV=${uvResponse.value}")
+
+            // 4. API 응답을 WeatherData로 변환
             val weatherData = weatherApiMapper.toWeatherData(
                 latitude = latitude,
                 longitude = longitude,
                 cityName = cityName,
                 weatherResponse = weatherResponse,
-                airResponse = airResponse
+                airResponse = airResponse,
+                uvResponse = uvResponse
             )
 
             log.info("🎯 ${cityName} 날씨 데이터 수집 완료!")
             weatherData
 
         } catch (e: Exception) {
-            log.error("❌ ${cityName} 날씨 데이터 수집 실패", e)
+            log.error("❌ $cityName 날씨 데이터 수집 실패", e)
             log.error("🔍 실패 원인: ${e.message}")
             log.error("🔍 예외 타입: ${e::class.simpleName}")
 

@@ -1,4 +1,4 @@
-package com.wout.weather.entity
+package com.wout.weather.entity.enums
 
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -6,7 +6,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * packageName    : com.wout.weather.entity
+ * packageName    : com.wout.weather.entity.enums
  * fileName       : KoreanMajorCity
  * author         : MinKyu Park
  * date           : 25. 5. 24.
@@ -34,7 +34,7 @@ enum class KoreanMajorCity(
     ULSAN("울산광역시", "Ulsan", 35.5384, 129.3114, 1111371, "영남권"),
     SEJONG("세종특별자치시", "Sejong", 36.4800, 127.2890, 342328, "호서권"),
 
-    // 수도권 주요 시 (7개)
+    // 수도권 주요 시 (9개)
     SUWON("수원특례시", "Suwon", 37.2636, 127.0286, 1190368, "수도권"),
     YONGIN("용인특례시", "Yongin", 37.2410, 127.1776, 1075570, "수도권"),
     GOYANG("고양특례시", "Goyang", 37.6584, 126.8320, 1075202, "수도권"),
@@ -42,6 +42,8 @@ enum class KoreanMajorCity(
     HWASEONG("화성특례시", "Hwaseong", 37.1997, 126.8312, 907958, "수도권"),
     BUCHEON("부천시", "Bucheon", 37.4989, 126.7831, 791263, "수도권"),
     NAMYANGJU("남양주시", "Namyangju", 37.6360, 127.2164, 737366, "수도권"),
+    ANSAN("안산시", "Ansan", 37.3219, 126.8309, 643044, "수도권"),
+    ANYANG("안양시", "Anyang", 37.3943, 126.9568, 565392, "수도권"),
 
     // 영남권 주요 시 (3개)
     CHANGWON("창원특례시", "Changwon", 35.2280, 128.6811, 1003737, "영남권"),
@@ -52,12 +54,9 @@ enum class KoreanMajorCity(
     CHEONGJU("청주시", "Cheongju", 36.6424, 127.4890, 849388, "호서권"),
     CHEONAN("천안시", "Cheonan", 36.8151, 127.1139, 657821, "호서권"),
 
-    // 호남권 주요 시 (2개)
-    JEONJU("전주시", "Jeonju", 35.8242, 127.1480, 652458, "호남권"),
-    ANSAN("안산시", "Ansan", 37.3219, 126.8309, 643044, "수도권"),
+    // 호남권 주요 시 (1개)
+    JEONJU("전주시", "Jeonju", 35.8242, 127.1480, 652458, "호남권");
 
-    // 기타 주요 시 (1개)
-    ANYANG("안양시", "Anyang", 37.3943, 126.9568, 565392, "수도권");
 
     companion object {
         /**

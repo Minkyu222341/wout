@@ -1,9 +1,11 @@
 package com.wout.infra.openweather.client
 
+import com.wout.infra.openweather.config.OpenWeatherClientConfig
 import com.wout.infra.openweather.dto.request.AirPollutionApiRequest
 import com.wout.infra.openweather.dto.request.WeatherApiRequest
 import com.wout.infra.openweather.dto.response.AirPollutionResponse
 import com.wout.infra.openweather.dto.response.OpenWeatherResponse
+import com.wout.infra.openweather.dto.response.UVIndexResponse
 import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.cloud.openfeign.SpringQueryMap
 import org.springframework.web.bind.annotation.GetMapping
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping
  * -----------------------------------------------------------
  * 25. 5. 21.        MinKyu Park       최초 생성
  * 25. 5. 24.        MinKyu Park       AirPollution API 통합
+ * 25. 5. 24.        MinKyu Park       OpenWeatherClientConfig import 추가
  */
 @FeignClient(
     name = "openWeatherClient",           // API 호출용 (변경 금지)
@@ -45,4 +48,11 @@ interface OpenWeatherClient {
     fun getAirPollution(
         @SpringQueryMap request: AirPollutionApiRequest
     ): AirPollutionResponse
+
+    /**
+     * UV 지수 조회
+     * https://api.openweathermap.org/data/2.5/uvi
+     */
+    @GetMapping("/uvi")
+    fun getUVIndex(@SpringQueryMap request: WeatherApiRequest): UVIndexResponse
 }

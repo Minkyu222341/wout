@@ -1,6 +1,7 @@
 package com.wout.weather.entity
 
 import com.wout.common.entity.BaseTimeEntity
+import com.wout.weather.entity.builder.WeatherDataBuilder
 import jakarta.persistence.*
 import org.hibernate.annotations.Comment
 
@@ -15,6 +16,7 @@ import org.hibernate.annotations.Comment
  * -----------------------------------------------------------
  * 25. 5. 21.        MinKyu Park       최초 생성
  * 25. 5. 24.        MinKyu Park       OpenWeatherMap 전체 필드 추가
+ * 25. 5. 24.        MinKyu Park       Builder 패턴을 별도 파일로 분리
  */
 @Entity
 class WeatherData(
@@ -167,78 +169,9 @@ class WeatherData(
     val dataTimestamp: Long
 
 ) : BaseTimeEntity() {
-
     companion object {
-        fun create(
-            latitude: Double,
-            longitude: Double,
-            cityName: String,
-            temperature: Double,
-            feelsLike: Double,
-            tempMin: Double,
-            tempMax: Double,
-            humidity: Int,
-            pressure: Int,
-            seaLevelPressure: Int? = null,
-            groundLevelPressure: Int? = null,
-            windSpeed: Double,
-            windDirection: Int? = null,
-            windGust: Double? = null,
-            weatherMain: String,
-            weatherDescription: String,
-            weatherIcon: String,
-            visibility: Int? = null,
-            cloudiness: Int,
-            rain1h: Double? = null,
-            rain3h: Double? = null,
-            snow1h: Double? = null,
-            snow3h: Double? = null,
-            uvIndex: Double? = null,
-            pm25: Double? = null,
-            pm10: Double? = null,
-            co: Double? = null,
-            no2: Double? = null,
-            ozone: Double? = null,
-            so2: Double? = null,
-            sunrise: Long? = null,
-            sunset: Long? = null,
-            dataTimestamp: Long
-        ): WeatherData {
-            return WeatherData(
-                latitude = latitude,
-                longitude = longitude,
-                cityName = cityName,
-                temperature = temperature,
-                feelsLike = feelsLike,
-                tempMin = tempMin,
-                tempMax = tempMax,
-                humidity = humidity,
-                pressure = pressure,
-                seaLevelPressure = seaLevelPressure,
-                groundLevelPressure = groundLevelPressure,
-                windSpeed = windSpeed,
-                windDirection = windDirection,
-                windGust = windGust,
-                weatherMain = weatherMain,
-                weatherDescription = weatherDescription,
-                weatherIcon = weatherIcon,
-                visibility = visibility,
-                cloudiness = cloudiness,
-                rain1h = rain1h,
-                rain3h = rain3h,
-                snow1h = snow1h,
-                snow3h = snow3h,
-                uvIndex = uvIndex,
-                pm25 = pm25,
-                pm10 = pm10,
-                co = co,
-                no2 = no2,
-                ozone = ozone,
-                so2 = so2,
-                sunrise = sunrise,
-                sunset = sunset,
-                dataTimestamp = dataTimestamp
-            )
+        fun builder(): WeatherDataBuilder {
+            return WeatherDataBuilder()
         }
     }
 }

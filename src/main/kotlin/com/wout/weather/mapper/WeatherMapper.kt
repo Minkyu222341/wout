@@ -3,7 +3,9 @@ package com.wout.weather.mapper
 import com.wout.weather.dto.response.*
 import com.wout.weather.entity.WeatherData
 import org.springframework.stereotype.Component
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
@@ -11,7 +13,7 @@ import java.time.ZoneOffset
  * fileName       : WeatherMapper
  * author         : MinKyu Park
  * date           : 25. 5. 24.
- * description    : WeatherData 엔티티를 WeatherResponseDto로 변환하는 매퍼
+ * description    : WeatherData 엔티티를 WeatherResponse로 변환하는 매퍼
  * ===========================================================
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
@@ -23,8 +25,8 @@ class WeatherMapper {
     /**
      * WeatherData 엔티티를 WeatherResponseDto로 변환
      */
-    fun toResponseDto(weatherData: WeatherData): WeatherResponseDto {
-        return WeatherResponseDto(
+    fun toResponseDto(weatherData: WeatherData): WeatherResponse {
+        return WeatherResponse(
             location = LocationDto(
                 latitude = weatherData.latitude,
                 longitude = weatherData.longitude,
@@ -59,7 +61,12 @@ class WeatherMapper {
             uvIndex = weatherData.uvIndex,
             visibility = weatherData.visibility?.div(1000.0), // 미터를 킬로미터로 변환
             cloudiness = weatherData.cloudiness,
-            dataTime = LocalDateTime.ofEpochSecond(weatherData.dataTimestamp, 0, ZoneOffset.ofHours(9)),
+            dataTime = LocalDateTime.ofEpochSecond(
+                weatherData.dataTimestamp,
+                0,
+                ZoneId.of("Asia/Seoul").rules.getOffset(Instant.ofEpochSecond(weatherData.dataTimestamp))
+            ),
+
             updatedAt = weatherData.updatedAt
         )
     }
@@ -99,34 +106,38 @@ class WeatherMapper {
     private fun createSunInfoDto(weatherData: WeatherData): SunInfoDto? {
         return if (weatherData.sunrise != null && weatherData.sunset != null) {
             SunInfoDto(
-                sunrise = LocalDateTime.ofEpochSecond(weatherData.sunrise!!, 0, ZoneOffset.ofHours(9)),
-                sunset = LocalDateTime.ofEpochSecond(weatherData.sunset!!, 0, ZoneOffset.ofHours(9))
+                sunrise = LocalDateTime.ofEpochSecond(weatherData.sunrise ?: 0, 0, ZoneOffset.ofHours(9)),
+                sunset = LocalDateTime.ofEpochSecond(weatherData.sunset ?: 0, 0, ZoneOffset.ofHours(9))
             )
         } else null
     }
 
     /**
-     * 미세먼지 수치 기반 대기질 지수 계산 (WHO 기준)
+     * 미세먼지 수치 기반 대기질 지수 계산 (한국 환경공단 기준)
+     * 참고: 한국 환경공단 대기환경기준 (24시간 평균 기준)
+     * - PM2.5: 좋음(0-15), 보통(16-35), 나쁨(36-75), 매우나쁨(76+)
+     * - PM10: 좋음(0-30), 보통(31-80), 나쁨(81-150), 매우나쁨(151+)
      */
     private fun calculateAirQualityIndex(pm25: Double?, pm10: Double?): String {
         val pm25Level = pm25?.let {
             when {
-                it <= 15 -> 1  // 좋음
-                it <= 35 -> 2  // 보통
-                it <= 75 -> 3  // 나쁨
-                else -> 4      // 매우나쁨
+                it <= 15.0 -> 1  // 좋음 (0-15 µg/m³)
+                it <= 35.0 -> 2  // 보통 (16-35 µg/m³)
+                it <= 75.0 -> 3  // 나쁨 (36-75 µg/m³)
+                else -> 4        // 매우나쁨 (76+ µg/m³)
             }
         } ?: 1
 
         val pm10Level = pm10?.let {
             when {
-                it <= 30 -> 1   // 좋음
-                it <= 80 -> 2   // 보통
-                it <= 150 -> 3  // 나쁨
-                else -> 4       // 매우나쁨
+                it <= 30.0 -> 1   // 좋음 (0-30 µg/m³)
+                it <= 80.0 -> 2   // 보통 (31-80 µg/m³)
+                it <= 150.0 -> 3  // 나쁨 (81-150 µg/m³)
+                else -> 4         // 매우나쁨 (151+ µg/m³)
             }
         } ?: 1
 
+        // PM2.5와 PM10 중 더 나쁜 수치를 기준으로 판정
         val maxLevel = maxOf(pm25Level, pm10Level)
 
         return when (maxLevel) {

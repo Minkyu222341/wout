@@ -5,6 +5,8 @@ import com.querydsl.core.types.dsl.Expressions
 import com.querydsl.jpa.impl.JPAQueryFactory
 import com.wout.weather.entity.QWeatherData.weatherData
 import com.wout.weather.entity.WeatherData
+import jakarta.persistence.EntityManager
+import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 
 /**
@@ -17,9 +19,12 @@ import java.time.LocalDateTime
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 25. 5. 24.        MinKyu Park       최초 생성
+ * 25. 5. 25.        MinKyu Park       findLatestWeatherForAllCities 중복 방지 수정
+ * 25. 5. 25.        MinKyu Park       배치 처리 메서드 추가
  */
 class WeatherDataRepositoryImpl(
-    private val queryFactory: JPAQueryFactory
+    private val queryFactory: JPAQueryFactory,
+    private val entityManager: EntityManager
 ) : WeatherDataRepositoryCustom {
 
     /**
@@ -76,20 +81,19 @@ class WeatherDataRepositoryImpl(
 
     /**
      * 모든 주요 도시의 최신 날씨 데이터 조회
+     * 각 도시별 정확히 1개씩 반환 (ID 기준 최신 - 중복 방지)
      */
     override fun findLatestWeatherForAllCities(since: LocalDateTime): List<WeatherData> {
-        // 각 도시별 최신 createdAt 서브쿼리
-        val subQuery = queryFactory
-            .select(weatherData.createdAt.max())
-            .from(weatherData)
-            .where(weatherData.createdAt.goe(since))
-            .groupBy(weatherData.cityName)
-
         return queryFactory
             .selectFrom(weatherData)
             .where(
-                weatherData.createdAt.`in`(subQuery),
-                weatherData.createdAt.goe(since)
+                weatherData.id.`in`(
+                    queryFactory
+                        .select(weatherData.id.max())
+                        .from(weatherData)
+                        .where(weatherData.createdAt.goe(since))
+                        .groupBy(weatherData.cityName)
+                )
             )
             .orderBy(weatherData.cityName.asc())
             .fetch()
@@ -98,6 +102,7 @@ class WeatherDataRepositoryImpl(
     /**
      * 오래된 날씨 데이터 삭제
      */
+    @Transactional
     override fun deleteByCreatedAtBefore(cutoffDate: LocalDateTime): Long {
         return queryFactory
             .delete(weatherData)
@@ -132,6 +137,45 @@ class WeatherDataRepositoryImpl(
             .from(weatherData)
             .where(cityNameEq(cityName))
             .fetchOne() ?: 0L
+    }
+
+    /**
+     * 여러 도시의 데이터를 배치로 삭제
+     */
+    @Transactional
+    override fun batchDeleteByCityNames(cityNames: List<String>): Long {
+        if (cityNames.isEmpty()) return 0L
+
+        return queryFactory
+            .delete(weatherData)
+            .where(weatherData.cityName.`in`(cityNames))
+            .execute()
+    }
+
+    /**
+     * 여러 WeatherData를 진짜 배치로 삽입
+     */
+    @Transactional
+    override fun batchInsert(weatherDataList: List<WeatherData>): List<WeatherData> {
+        if (weatherDataList.isEmpty()) return emptyList()
+
+        val batchSize = 50
+        val savedData = mutableListOf<WeatherData>()
+
+        weatherDataList.chunked(batchSize).forEach { batch ->
+            batch.forEach { data ->
+                entityManager.persist(data)
+                savedData.add(data)
+            }
+
+            // 배치마다 flush (실제 DB에 전송)
+            entityManager.flush()
+
+            // 1차 캐시 정리 (메모리 절약)
+            entityManager.clear()
+        }
+
+        return savedData
     }
 
     /**

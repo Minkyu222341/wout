@@ -1,9 +1,9 @@
-package com.wout.infra.openweather.client
+package com.wout.infra.openweather.config
 
 import org.springframework.context.annotation.Configuration
 
 /**
- * packageName    : com.wout.infra.openweather.client
+ * packageName    : com.wout.infra.openweather.config
  * fileName       : OpenWeatherClientConfig
  * author         : MinKyu Park
  * date           : 25. 5. 21.

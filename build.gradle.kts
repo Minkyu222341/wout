@@ -71,7 +71,7 @@ allOpen {
 sourceSets {
     main {
         kotlin {
-            srcDir("$buildDir/generated/source/kapt/main")
+            srcDir("${layout.buildDirectory.get()}/generated/source/kapt/main")
         }
     }
 }
@@ -94,6 +94,6 @@ tasks.named("compileKotlin") {
 
 tasks.clean {
     doFirst {
-        delete("$buildDir/generated")
+        delete("${layout.buildDirectory.get()}/generated")
     }
 }

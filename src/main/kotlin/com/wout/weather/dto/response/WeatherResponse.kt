@@ -5,7 +5,7 @@ import java.time.LocalDateTime
 
 /**
  * packageName    : com.wout.weather.dto.response
- * fileName       : WeatherResponseDto
+ * fileName       : WeatherResponse
  * author         : MinKyu Park
  * date           : 25. 5. 21.
  * description    : 날씨 정보 응답 DTO
@@ -16,7 +16,7 @@ import java.time.LocalDateTime
  * 25. 5. 24.        MinKyu Park       OpenWeatherMap 전체 필드 추가
  */
 @Schema(description = "날씨 정보 응답")
-data class WeatherResponseDto(
+data class WeatherResponse(
     @Schema(description = "위치 정보")
     val location: LocationDto,
 

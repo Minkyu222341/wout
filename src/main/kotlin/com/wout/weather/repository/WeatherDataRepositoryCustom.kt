@@ -24,4 +24,7 @@ interface WeatherDataRepositoryCustom {
     fun deleteByCreatedAtBefore(cutoffDate: LocalDateTime): Long
     fun findByCityNameAndDateRange(cityName: String, startDate: LocalDateTime, endDate: LocalDateTime): List<WeatherData>
     fun countByCityName(cityName: String): Long
+    fun batchDeleteByCityNames(cityNames: List<String>): Long
+
+    fun batchInsert(weatherDataList: List<WeatherData>): List<WeatherData>
 }
