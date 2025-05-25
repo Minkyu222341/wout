@@ -41,10 +41,6 @@ class OpenWeatherApiService(
         log.info("🌤️ $cityName 날씨 데이터 수집 시작")
         log.info("📍 좌표: lat=$latitude, lon=$longitude")
 
-        // 🔍 API 키 확인 (첫 3자만 표시)
-        val maskedApiKey = if (apiKey.length > 3) "${apiKey.take(3)}***" else "NOT_SET"
-        log.info("🔑 API Key: $maskedApiKey")
-
         return try {
             // 1. 날씨 정보 API 호출
             val weatherRequest = WeatherApiRequest(
@@ -85,24 +81,11 @@ class OpenWeatherApiService(
                 uvResponse = uvResponse
             )
 
-            log.info("🎯 ${cityName} 날씨 데이터 수집 완료!")
+            log.info("🎯 $cityName 날씨 데이터 수집 완료!")
             weatherData
 
         } catch (e: Exception) {
             log.error("❌ $cityName 날씨 데이터 수집 실패", e)
-            log.error("🔍 실패 원인: ${e.message}")
-            log.error("🔍 예외 타입: ${e::class.simpleName}")
-
-            // 🚨 API 키가 문제인지 확인
-            if (e.message?.contains("401") == true || e.message?.contains("Unauthorized") == true) {
-                log.error("🔑 API 키 문제 의심: $maskedApiKey")
-            }
-
-            // 🚨 좌표가 문제인지 확인
-            if (e.message?.contains("400") == true || e.message?.contains("Bad Request") == true) {
-                log.error("📍 좌표 문제 의심: lat=$latitude, lon=$longitude")
-            }
-
             throw e
         }
     }
