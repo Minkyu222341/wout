@@ -4,6 +4,7 @@ import com.wout.common.exception.ApiException
 import com.wout.common.exception.ErrorCode.WEATHER_DATA_NOT_FOUND
 import com.wout.weather.dto.response.WeatherResponse
 import com.wout.weather.dto.response.WeatherSummary
+import com.wout.weather.entity.WeatherData
 import com.wout.weather.entity.enums.KoreanMajorCity
 import com.wout.weather.mapper.WeatherMapper
 import com.wout.weather.repository.WeatherDataRepository
@@ -138,5 +139,32 @@ class WeatherService(
             lastUpdated = lastUpdated,
             message = message
         )
+    }
+
+    /**
+     * 위도/경도 기반 WeatherData 엔티티 조회 (WeatherScoreService용)
+     */
+    fun getCurrentWeatherData(userLat: Double, userLon: Double): WeatherData {
+        val nearestCity = KoreanMajorCity.findNearestCity(userLat, userLon)
+
+        return weatherRepository.findLatestByCityName(
+            cityName = nearestCity.cityName,
+            since = LocalDateTime.now().minusHours(1)
+        ) ?: weatherRepository.findLatestByCityName(nearestCity.cityName)
+        ?: throw ApiException(
+            WEATHER_DATA_NOT_FOUND,
+            WEATHER_DATA_NOT_FOUND.message
+        )
+    }
+
+    /**
+     * 도시명 기반 WeatherData 엔티티 조회 (WeatherScoreService용)
+     */
+    fun getCurrentWeatherDataByCity(cityName: String): WeatherData {
+        return weatherRepository.findLatestByCityName(cityName)
+            ?: throw ApiException(
+                WEATHER_DATA_NOT_FOUND,
+                WEATHER_DATA_NOT_FOUND.message
+            )
     }
 }
