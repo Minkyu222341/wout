@@ -54,15 +54,12 @@ class WeatherScoreService(
             throw ApiException(INVALID_INPUT_VALUE)
         }
 
-        // 1. 사용자 조회
         val member = memberRepository.findByDeviceId(deviceId)
             .orElseThrow { ApiException(MEMBER_NOT_FOUND) }
 
-        // 2. 날씨 선호도 조회
         val weatherPreference = weatherPreferenceRepository.findByMemberId(member.id)
             .orElseThrow { ApiException(SENSITIVITY_PROFILE_NOT_FOUND) }
 
-        // 3. 현재 날씨 데이터 조회
         val weatherData = try {
             weatherService.getCurrentWeatherData(latitude, longitude)
         } catch (e: Exception) {
