@@ -34,15 +34,4 @@ data class MemberCreateRequest(
 
     @field:Size(max = 100, message = "지역명은 100자를 초과할 수 없습니다")
     val cityName: String? = null
-) {
-    /**
-     * 위치 정보 유효성 검증
-     */
-    fun isValidLocation(): Boolean {
-        return if (latitude != null || longitude != null) {
-            latitude != null && longitude != null
-        } else {
-            true
-        }
-    }
-}
+)

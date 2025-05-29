@@ -14,6 +14,7 @@ import org.hibernate.annotations.Comment
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-05-27        MinKyu Park       최초 생성
+ * 2025-05-29        MinKyu Park       체감온도 계산 공식 수정 및 개인화
  */
 @Entity
 class WeatherPreference private constructor(
@@ -177,27 +178,60 @@ class WeatherPreference private constructor(
     }
 
     /**
-     * 개인별 체감온도 계산
+     * 개인별 체감온도 계산 (수정된 버전)
      */
     fun calculateFeelsLikeTemperature(
         actualTemp: Double,
         windSpeed: Double,
         humidity: Double
     ): Double {
-        // 1. 기본 체감온도 (풍속 고려)
-        val windChillTemp = 13.12 + 0.6215 * actualTemp -
-                11.37 * Math.pow(windSpeed, 0.16) +
-                0.3965 * Math.pow(windSpeed, 0.16) * actualTemp
+        var feelsLikeTemp = actualTemp
 
-        // 2. 습도 보정
-        val humidityCorrection = when {
-            humidity >= 85 -> 3.0
-            humidity >= 75 -> 2.0
-            humidity >= 65 -> 1.0
-            else -> 0.0
+        // 1. Wind Chill 계산 (10°C 이하에서만 적용)
+        if (actualTemp <= 10.0 && windSpeed > 1.6) { // 풍속 1.6 km/h 이상에서만
+            feelsLikeTemp = 13.12 + 0.6215 * actualTemp -
+                    11.37 * Math.pow(windSpeed, 0.16) +
+                    0.3965 * actualTemp * Math.pow(windSpeed, 0.16)  // ✅ 올바른 공식
+        }
+        // 2. Heat Index 계산 (27°C 이상에서만 적용)
+        else if (actualTemp >= 27.0 && humidity >= 40.0) {
+            // 간단한 Heat Index 공식 사용
+            val tempF = actualTemp * 9.0 / 5.0 + 32.0  // 화씨 변환
+            val heatIndexF = -42.379 + 2.04901523 * tempF + 10.14333127 * humidity -
+                    0.22475541 * tempF * humidity - 0.00683783 * tempF * tempF -
+                    0.05481717 * humidity * humidity + 0.00122874 * tempF * tempF * humidity +
+                    0.00085282 * tempF * humidity * humidity - 0.00000199 * tempF * tempF * humidity * humidity
+            feelsLikeTemp = (heatIndexF - 32.0) * 5.0 / 9.0  // 섭씨 변환
         }
 
-        // 3. 개인별 보정 + 습도 보정
-        return windChillTemp + personalTempCorrection + humidityCorrection
+        // 3. 습도 보정 (개인 민감도 반영)
+        val humidityCorrection = getHumidityCorrection(humidity)
+
+        // 4. 개인별 온도 보정 적용
+        return feelsLikeTemp + this.personalTempCorrection + humidityCorrection
+    }
+
+    /**
+     * 개인 습도 민감도에 따른 보정값 계산
+     */
+    private fun getHumidityCorrection(humidity: Double): Double {
+        val baseCorrection = when {
+            humidity >= 85 -> 3.0   // 매우 습함
+            humidity >= 75 -> 2.0   // 습함
+            humidity >= 65 -> 1.0   // 약간 습함
+            humidity >= 40 -> 0.0   // 적당함
+            humidity >= 30 -> -0.5  // 건조함
+            else -> -1.0            // 매우 건조함
+        }
+
+        // 개인 습도 민감도 반영
+        val sensitivityMultiplier = when (this.humidityReaction) {
+            "high" -> 1.5    // 습도에 매우 민감 (50% 증폭)
+            "medium" -> 1.0  // 보통 민감도
+            "low" -> 0.5     // 습도에 둔감 (50% 감소)
+            else -> 1.0      // 기본값
+        }
+
+        return baseCorrection * sensitivityMultiplier
     }
 }

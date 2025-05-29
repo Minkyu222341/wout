@@ -2,7 +2,8 @@ package com.wout.member.service
 
 import com.wout.common.exception.ApiException
 import com.wout.common.exception.ErrorCode
-import com.wout.member.dto.request.MemberUpdateRequest
+import com.wout.member.dto.request.LocationUpdateRequest
+import com.wout.member.dto.request.MemberCreateRequest
 import com.wout.member.dto.request.WeatherPreferenceSetupRequest
 import com.wout.member.dto.request.WeatherPreferenceUpdateRequest
 import com.wout.member.dto.response.MemberResponse
@@ -40,7 +41,10 @@ class MemberService(
      * 앱 실행 시 deviceId로 기존 사용자 확인 또는 자동 회원가입
      */
     @Transactional
-    fun getOrCreateMember(deviceId: String): MemberWithPreferenceResponse {
+    fun getOrCreateMember(request: MemberCreateRequest): MemberWithPreferenceResponse {
+        val deviceId = request.deviceId
+
+
         if (deviceId.isBlank()) {
             throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
         }
@@ -91,56 +95,52 @@ class MemberService(
         return weatherPreferenceMapper.toMemberWithPreferenceResponse(member, weatherPreference)
     }
 
+
     /**
-     * 회원 기본 정보 수정 (닉네임, 위치)
+     * 닉네임 수정
      */
     @Transactional
-    fun updateMemberInfo(deviceId: String, request: MemberUpdateRequest): MemberResponse {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+    fun updateNickname(deviceId: String, nickname: String): MemberResponse {
+        val member = findMemberByDeviceId(deviceId)
 
-        if (!request.hasUpdates()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
-
-        if (!request.isValidLocation()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
-
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
-
-        // 필요한 정보만 업데이트
-        val updatedMember = when {
-            request.nickname != null && (request.latitude != null && request.longitude != null) -> {
-                // 닉네임 + 위치 둘 다 업데이트
-                member.updateNickname(request.nickname)
-                    .updateDefaultLocation(request.latitude, request.longitude, request.cityName)
-            }
-            request.nickname != null -> {
-                // 닉네임만 업데이트
-                member.updateNickname(request.nickname)
-            }
-            request.latitude != null && request.longitude != null -> {
-                // 위치만 업데이트
-                member.updateDefaultLocation(request.latitude, request.longitude, request.cityName)
-            }
-            else -> member // 변경사항 없음
-        }
-
+        // ✅ 닉네임 업데이트만 집중
+        val updatedMember = member.updateNickname(nickname)
         val savedMember = memberRepository.save(updatedMember)
+
         return memberMapper.toResponse(savedMember)
+    }
+
+    /**
+     * 기본 위치 정보 수정
+     */
+    @Transactional
+    fun updateLocation(deviceId: String, request: LocationUpdateRequest): MemberResponse {
+        val member = findMemberByDeviceId(deviceId)
+
+        // ✅ 위치 정보 업데이트만 집중
+        val updatedMember = member.updateDefaultLocation(
+            latitude = request.latitude,
+            longitude = request.longitude,
+            cityName = request.cityName
+        )
+        val savedMember = memberRepository.save(updatedMember)
+
+        return memberMapper.toResponse(savedMember)
+    }
+
+    /**
+     * 공통 회원 조회 메서드
+     */
+    private fun findMemberByDeviceId(deviceId: String): Member {
+        return memberRepository.findByDeviceId(deviceId)
+            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND, "회원을 찾을 수 없습니다: $deviceId") }
     }
 
     /**
      * 5단계 날씨 선호도 설정 완료
      */
     @Transactional
-    fun setupWeatherPreference(
-        deviceId: String,
-        request: WeatherPreferenceSetupRequest
-    ): WeatherPreferenceResponse {
+    fun setupWeatherPreference(deviceId: String, request: WeatherPreferenceSetupRequest): WeatherPreferenceResponse {
         if (deviceId.isBlank()) {
             throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
         }
@@ -152,9 +152,8 @@ class MemberService(
         val member = memberRepository.findByDeviceId(deviceId)
             .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
 
-        // 이미 설정된 선호도가 있는지 확인
         if (weatherPreferenceRepository.existsByMemberId(member.id)) {
-            throw ApiException(ErrorCode.DEVICE_ALREADY_EXISTS)
+            throw ApiException(ErrorCode.WEATHER_PREFERENCE_ALREADY_EXISTS)
         }
 
         val weatherPreference = weatherPreferenceMapper.toEntity(member.id, request)

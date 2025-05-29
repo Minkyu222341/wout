@@ -32,6 +32,7 @@ enum class ErrorCode(
     // 날씨 관련 에러
     WEATHER_API_ERROR(500, "W001", "날씨 API 호출 중 오류가 발생했습니다."),
     WEATHER_DATA_NOT_FOUND(404, "W002", "날씨 데이터를 찾을 수 없습니다."),
+    WEATHER_PREFERENCE_ALREADY_EXISTS(409, "W002", "이미 날씨 선호도가 설정되어 있습니다"),
 
     // 회원 관련 에러 추가
     MEMBER_NOT_FOUND(404, "M001", "회원을 찾을 수 없습니다."),

@@ -8,8 +8,7 @@ import com.wout.member.service.WeatherScoreService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
@@ -32,9 +31,9 @@ class WeatherScoreController(
 ) {
 
     @Operation(summary = "위치 기반 날씨 점수 조회")
-    @PostMapping("/location")
+    @GetMapping("/location")
     fun getWeatherScoreByLocation(
-        @Valid @RequestBody request: WeatherScoreLocationRequest
+        @Valid request: WeatherScoreLocationRequest
     ): ApiResponse<WeatherScoreResponse> {
 
         val weatherScore = weatherScoreService.getPersonalizedWeatherScore(
@@ -47,9 +46,9 @@ class WeatherScoreController(
     }
 
     @Operation(summary = "도시명 기반 날씨 점수 조회")
-    @PostMapping("/city")
+    @GetMapping("/city")
     fun getWeatherScoreByCity(
-        @Valid @RequestBody request: WeatherScoreCityRequest
+        @Valid request: WeatherScoreCityRequest
     ): ApiResponse<WeatherScoreResponse> {
 
         val weatherScore = weatherScoreService.getPersonalizedWeatherScoreByCity(

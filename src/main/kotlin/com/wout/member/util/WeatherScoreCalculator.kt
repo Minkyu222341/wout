@@ -8,7 +8,7 @@ import kotlin.math.max
 import kotlin.math.pow
 
 /**
- * packageName    : com.wout.weather.calculator
+ * packageName    : com.wout.member.util
  * fileName       : WeatherScoreCalculator
  * author         : MinKyu Park
  * date           : 2025-05-27
@@ -17,9 +17,46 @@ import kotlin.math.pow
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-05-27        MinKyu Park       최초 생성
+ * 2025-05-29        MinKyu Park       Magic Number 상수화 (유지보수성 향상)
  */
 @Component
 class WeatherScoreCalculator {
+
+    companion object {
+        // 기온 계산 상수
+        private const val OPTIMAL_TEMPERATURE = 22.0  // 최적 온도 (섭씨)
+        private const val TEMPERATURE_SIGMA = 8.0     // 온도 분포 표준편차
+
+        // 습도 계산 상수
+        private const val HUMIDITY_OPTIMAL_MIN = 40.0  // 최적 습도 최소값
+        private const val HUMIDITY_OPTIMAL_MAX = 60.0  // 최적 습도 최대값
+
+        // 바람 계산 상수
+        private const val WIND_OPTIMAL_MIN = 2.0  // 최적 풍속 최소값 (m/s)
+        private const val WIND_OPTIMAL_MAX = 3.0  // 최적 풍속 최대값 (m/s)
+
+        // 우선순위 패널티 임계값
+        private const val HEAT_THRESHOLD = 30.0      // 더위 기준 온도
+        private const val COLD_THRESHOLD = 5.0       // 추위 기준 온도
+        private const val HUMIDITY_THRESHOLD = 75.0  // 습함 기준 습도
+        private const val WIND_THRESHOLD = 6.0       // 강풍 기준
+        private const val UV_THRESHOLD = 8.0         // 자외선 위험 기준
+        private const val PM25_THRESHOLD = 75.0      // PM2.5 나쁨 기준
+        private const val PM10_THRESHOLD = 150.0     // PM10 나쁨 기준
+
+        // 점수 등급 경계값
+        private const val PERFECT_SCORE_THRESHOLD = 90.0  // 완벽한 날씨
+        private const val GOOD_SCORE_THRESHOLD = 70.0     // 좋은 날씨
+        private const val FAIR_SCORE_THRESHOLD = 50.0     // 보통 날씨
+        private const val POOR_SCORE_THRESHOLD = 30.0     // 아쉬운 날씨
+
+        // 개인 가중치 기준값
+        private const val DEFAULT_WEIGHT_BASE = 50.0      // 기본 가중치 기준값
+
+        // 대기질 계산 비율
+        private const val PM25_WEIGHT_RATIO = 0.7  // PM2.5 비중
+        private const val PM10_WEIGHT_RATIO = 0.3  // PM10 비중
+    }
 
     /**
      * 전체 날씨 점수 계산
@@ -75,11 +112,8 @@ class WeatherScoreCalculator {
      * 1단계: 기온 점수 계산 (22도 기준 가우시안 분포)
      */
     private fun calculateTemperatureScore(temperature: Double): Double {
-        val optimal = 22.0  // 최적 온도
-        val sigma = 8.0     // 표준편차 (더 부드러운 곡선)
-
         // 가우시안 함수: e^(-(x-μ)²/(2σ²))
-        val score = exp(-((temperature - optimal).pow(2)) / (2 * sigma.pow(2))) * 100
+        val score = exp(-((temperature - OPTIMAL_TEMPERATURE).pow(2)) / (2 * TEMPERATURE_SIGMA.pow(2))) * 100
 
         return score.coerceIn(0.0, 100.0)
     }
@@ -89,10 +123,10 @@ class WeatherScoreCalculator {
      */
     private fun calculateHumidityScore(humidity: Double): Double {
         return when {
-            humidity in 40.0..60.0 -> 100.0  // 최적 구간
-            humidity in 30.0..40.0 || humidity in 60.0..70.0 -> {
+            humidity in HUMIDITY_OPTIMAL_MIN..HUMIDITY_OPTIMAL_MAX -> 100.0  // 최적 구간
+            humidity in 30.0..HUMIDITY_OPTIMAL_MIN || humidity in HUMIDITY_OPTIMAL_MAX..70.0 -> {
                 // 선형 감소
-                val distance = if (humidity < 40) 40 - humidity else humidity - 60
+                val distance = if (humidity < HUMIDITY_OPTIMAL_MIN) HUMIDITY_OPTIMAL_MIN - humidity else humidity - HUMIDITY_OPTIMAL_MAX
                 100 - (distance * 3)  // 1%당 3점 감소
             }
             humidity in 20.0..30.0 || humidity in 70.0..80.0 -> {
@@ -111,11 +145,11 @@ class WeatherScoreCalculator {
      */
     private fun calculateWindScore(windSpeed: Double): Double {
         return when {
-            windSpeed in 2.0..3.0 -> 100.0  // 최적
-            windSpeed in 1.0..2.0 || windSpeed in 3.0..4.0 -> 85.0  // 좋음
-            windSpeed in 0.5..1.0 || windSpeed in 4.0..6.0 -> 70.0  // 보통
+            windSpeed in WIND_OPTIMAL_MIN..WIND_OPTIMAL_MAX -> 100.0  // 최적
+            windSpeed in 1.0..WIND_OPTIMAL_MIN || windSpeed in WIND_OPTIMAL_MAX..4.0 -> 85.0  // 좋음
+            windSpeed in 0.5..1.0 || windSpeed in 4.0..WIND_THRESHOLD -> 70.0  // 보통
             windSpeed < 0.5 -> 60.0  // 무풍 (답답함)
-            windSpeed in 6.0..10.0 -> 50.0  // 강풍
+            windSpeed in WIND_THRESHOLD..10.0 -> 50.0  // 강풍
             else -> 20.0  // 매우 강풍
         }.coerceIn(0.0, 100.0)
     }
@@ -141,7 +175,7 @@ class WeatherScoreCalculator {
         val pm25Score = when {
             pm25 <= 15 -> 100.0      // 좋음
             pm25 <= 35 -> 80.0       // 보통
-            pm25 <= 75 -> 60.0       // 나쁨
+            pm25 <= PM25_THRESHOLD -> 60.0       // 나쁨
             else -> 30.0             // 매우 나쁨
         }
 
@@ -149,12 +183,12 @@ class WeatherScoreCalculator {
         val pm10Score = when {
             pm10 <= 30 -> 100.0      // 좋음
             pm10 <= 80 -> 80.0       // 보통
-            pm10 <= 150 -> 60.0      // 나쁨
+            pm10 <= PM10_THRESHOLD -> 60.0      // 나쁨
             else -> 30.0             // 매우 나쁨
         }
 
         // PM2.5가 더 중요하므로 7:3 비율
-        return (pm25Score * 0.7 + pm10Score * 0.3).coerceIn(0.0, 100.0)
+        return (pm25Score * PM25_WEIGHT_RATIO + pm10Score * PM10_WEIGHT_RATIO).coerceIn(0.0, 100.0)
     }
 
     /**
@@ -165,11 +199,11 @@ class WeatherScoreCalculator {
         preference: WeatherPreference
     ): ElementScores {
         return ElementScores(
-            temperature = baseScores.temperature * (preference.temperatureWeight / 50.0),
-            humidity = baseScores.humidity * (preference.humidityWeight / 50.0),
-            wind = baseScores.wind * (preference.windWeight / 50.0),
-            uv = baseScores.uv * (preference.uvWeight / 50.0),
-            airQuality = baseScores.airQuality * (preference.airQualityWeight / 50.0)
+            temperature = baseScores.temperature * (preference.temperatureWeight / DEFAULT_WEIGHT_BASE),
+            humidity = baseScores.humidity * (preference.humidityWeight / DEFAULT_WEIGHT_BASE),
+            wind = baseScores.wind * (preference.windWeight / DEFAULT_WEIGHT_BASE),
+            uv = baseScores.uv * (preference.uvWeight / DEFAULT_WEIGHT_BASE),
+            airQuality = baseScores.airQuality * (preference.airQualityWeight / DEFAULT_WEIGHT_BASE)
         )
     }
 
@@ -194,42 +228,42 @@ class WeatherScoreCalculator {
 
             when (priority) {
                 "heat" -> {
-                    if (temperature >= 30.0) {
+                    if (temperature >= HEAT_THRESHOLD) {
                         penalizedScores = penalizedScores.copy(
                             temperature = penalizedScores.temperature * penaltyWeight
                         )
                     }
                 }
                 "cold" -> {
-                    if (temperature <= 5.0) {
+                    if (temperature <= COLD_THRESHOLD) {
                         penalizedScores = penalizedScores.copy(
                             temperature = penalizedScores.temperature * penaltyWeight
                         )
                     }
                 }
                 "humidity" -> {
-                    if (humidity >= 75.0) {  // 장마철 수준
+                    if (humidity >= HUMIDITY_THRESHOLD) {  // 장마철 수준
                         penalizedScores = penalizedScores.copy(
                             humidity = penalizedScores.humidity * penaltyWeight
                         )
                     }
                 }
                 "wind" -> {
-                    if (windSpeed >= 6.0) {  // 강풍
+                    if (windSpeed >= WIND_THRESHOLD) {  // 강풍
                         penalizedScores = penalizedScores.copy(
                             wind = penalizedScores.wind * penaltyWeight
                         )
                     }
                 }
                 "uv" -> {
-                    if (uvIndex >= 8.0) {  // 매우 높음
+                    if (uvIndex >= UV_THRESHOLD) {  // 매우 높음
                         penalizedScores = penalizedScores.copy(
                             uv = penalizedScores.uv * penaltyWeight
                         )
                     }
                 }
                 "pollution" -> {
-                    if (pm25 >= 75.0 || pm10 >= 150.0) {  // 나쁨 수준
+                    if (pm25 >= PM25_THRESHOLD || pm10 >= PM10_THRESHOLD) {  // 나쁨 수준
                         penalizedScores = penalizedScores.copy(
                             airQuality = penalizedScores.airQuality * penaltyWeight
                         )
@@ -280,10 +314,10 @@ class WeatherScoreCalculator {
      */
     private fun getWeatherGrade(score: Double): WeatherGrade {
         return when {
-            score >= 90 -> WeatherGrade.PERFECT
-            score >= 70 -> WeatherGrade.GOOD
-            score >= 50 -> WeatherGrade.FAIR
-            score >= 30 -> WeatherGrade.POOR
+            score >= PERFECT_SCORE_THRESHOLD -> WeatherGrade.PERFECT
+            score >= GOOD_SCORE_THRESHOLD -> WeatherGrade.GOOD
+            score >= FAIR_SCORE_THRESHOLD -> WeatherGrade.FAIR
+            score >= POOR_SCORE_THRESHOLD -> WeatherGrade.POOR
             else -> WeatherGrade.TERRIBLE
         }
     }

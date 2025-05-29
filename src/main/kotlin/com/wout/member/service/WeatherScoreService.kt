@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional
  * -----------------------------------------------------------
  * 2025-05-27        MinKyu Park       최초 생성
  * 2025-05-27        MinKyu Park       LocationInfo import 추가
+ * 2025-05-29        MinKyu Park       WeatherScoreResponse 생성 로직 공통화
  */
 @Service
 @Transactional(readOnly = true)
@@ -66,41 +67,20 @@ class WeatherScoreService(
             throw ApiException(WEATHER_DATA_NOT_FOUND)
         }
 
-        // 4. 개인화된 점수 계산
+        // 개인화된 점수 계산
         val scoreResult = calculatePersonalizedScore(weatherData, weatherPreference)
 
-        // 5. 개인화된 메시지 생성
+        // 개인화된 메시지 생성
         val personalizedMessage = generatePersonalizedMessage(scoreResult, weatherPreference)
 
-        return WeatherScoreResponse(
-            totalScore = scoreResult.totalScore.toInt(),
-            grade = scoreResult.grade,
-            message = personalizedMessage,
-            elementScores = ElementScoreDetails(
-                temperature = scoreResult.elementScores.temperature.toInt(),
-                humidity = scoreResult.elementScores.humidity.toInt(),
-                wind = scoreResult.elementScores.wind.toInt(),
-                uv = scoreResult.elementScores.uv.toInt(),
-                airQuality = scoreResult.elementScores.airQuality.toInt()
-            ),
-            weatherInfo = WeatherInfo(
-                temperature = weatherData.temperature,
-                feelsLikeTemperature = weatherPreference.calculateFeelsLikeTemperature(
-                    weatherData.temperature,
-                    weatherData.windSpeed,
-                    weatherData.humidity.toDouble()
-                ),
-                humidity = weatherData.humidity.toDouble(),
-                windSpeed = weatherData.windSpeed,
-                uvIndex = weatherData.uvIndex ?: 0.0,
-                pm25 = weatherData.pm25 ?: 0.0,
-                pm10 = weatherData.pm10 ?: 0.0
-            ),
-            location = LocationInfo(
-                latitude = latitude,
-                longitude = longitude,
-                cityName = weatherData.cityName
-            )
+        // ✅ 공통 메서드로 응답 생성
+        return buildWeatherScoreResponse(
+            scoreResult = scoreResult,
+            personalizedMessage = personalizedMessage,
+            weatherData = weatherData,
+            weatherPreference = weatherPreference,
+            latitude = latitude,
+            longitude = longitude
         )
     }
 
@@ -136,6 +116,28 @@ class WeatherScoreService(
         // 5. 개인화된 메시지 생성
         val personalizedMessage = generatePersonalizedMessage(scoreResult, weatherPreference)
 
+        // ✅ 공통 메서드로 응답 생성
+        return buildWeatherScoreResponse(
+            scoreResult = scoreResult,
+            personalizedMessage = personalizedMessage,
+            weatherData = weatherData,
+            weatherPreference = weatherPreference,
+            latitude = weatherData.latitude,
+            longitude = weatherData.longitude
+        )
+    }
+
+    /**
+     * WeatherScoreResponse 생성 공통 메서드
+     */
+    private fun buildWeatherScoreResponse(
+        scoreResult: WeatherScoreResult,
+        personalizedMessage: String,
+        weatherData: WeatherData,
+        weatherPreference: WeatherPreference,
+        latitude: Double,
+        longitude: Double
+    ): WeatherScoreResponse {
         return WeatherScoreResponse(
             totalScore = scoreResult.totalScore.toInt(),
             grade = scoreResult.grade,
@@ -161,8 +163,8 @@ class WeatherScoreService(
                 pm10 = weatherData.pm10 ?: 0.0
             ),
             location = LocationInfo(
-                latitude = weatherData.latitude,
-                longitude = weatherData.longitude,
+                latitude = latitude,
+                longitude = longitude,
                 cityName = weatherData.cityName
             )
         )

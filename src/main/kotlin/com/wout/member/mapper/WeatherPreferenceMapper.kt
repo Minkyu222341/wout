@@ -88,7 +88,6 @@ class WeatherPreferenceMapper(
         existing: WeatherPreference,
         request: WeatherPreferenceUpdateRequest
     ): WeatherPreference {
-        // null이 아닌 필드만 업데이트
         val newComfortTemp = request.comfortTemperature ?: existing.comfortTemperature
         val newTempWeight = request.temperatureWeight ?: existing.temperatureWeight
         val newHumidityWeight = request.humidityWeight ?: existing.humidityWeight
@@ -96,10 +95,6 @@ class WeatherPreferenceMapper(
         val newUvWeight = request.uvWeight ?: existing.uvWeight
         val newAirQualityWeight = request.airQualityWeight ?: existing.airQualityWeight
 
-        // 새로운 개인 보정값 계산
-        val newPersonalCorrection = (newComfortTemp - 20) * 0.5
-
-        // 불변 엔티티를 새로 생성하여 반환
         return WeatherPreference.createFromSetup(
             memberId = existing.memberId,
             priorityFirst = existing.priorityFirst,

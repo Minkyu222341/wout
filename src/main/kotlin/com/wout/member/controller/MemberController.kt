@@ -1,9 +1,7 @@
 package com.wout.member.controller
 
 import com.wout.common.response.ApiResponse
-import com.wout.member.dto.request.MemberUpdateRequest
-import com.wout.member.dto.request.WeatherPreferenceSetupRequest
-import com.wout.member.dto.request.WeatherPreferenceUpdateRequest
+import com.wout.member.dto.request.*
 import com.wout.member.dto.response.MemberResponse
 import com.wout.member.dto.response.MemberWithPreferenceResponse
 import com.wout.member.dto.response.WeatherPreferenceResponse
@@ -12,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
 import org.springframework.web.bind.annotation.*
 
 /**
@@ -24,6 +23,7 @@ import org.springframework.web.bind.annotation.*
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-05-27        MinKyu Park       최초 생성
+ * 2025-05-29        MinKyu Park       닉네임/위치 API 분리
  */
 @Tag(name = "Member API", description = "회원 관리 및 날씨 선호도 설정 API")
 @RestController
@@ -42,9 +42,9 @@ class MemberController(
     @PostMapping("/init")
     fun initializeMember(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @RequestParam deviceId: String
+        @Valid @RequestBody request: MemberCreateRequest
     ): ApiResponse<MemberWithPreferenceResponse> {
-        val result = memberService.getOrCreateMember(deviceId)
+        val result = memberService.getOrCreateMember(request)
         return ApiResponse.success(result)
     }
 
@@ -58,7 +58,7 @@ class MemberController(
     @PostMapping("/{deviceId}/weather-preference")
     fun setupWeatherPreference(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @PathVariable deviceId: String,
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String,
         @Valid @RequestBody request: WeatherPreferenceSetupRequest
     ): ApiResponse<WeatherPreferenceResponse> {
         val result = memberService.setupWeatherPreference(deviceId, request)
@@ -75,7 +75,7 @@ class MemberController(
     @PutMapping("/{deviceId}/weather-preference")
     fun updateWeatherPreference(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @PathVariable deviceId: String,
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String,
         @Valid @RequestBody request: WeatherPreferenceUpdateRequest
     ): ApiResponse<WeatherPreferenceResponse> {
         val result = memberService.updateWeatherPreference(deviceId, request)
@@ -83,19 +83,36 @@ class MemberController(
     }
 
     /**
-     * 회원 프로필 수정 (닉네임, 위치)
+     * 닉네임 수정
      */
     @Operation(
-        summary = "회원 프로필 수정",
-        description = "회원의 닉네임, 기본 위치 정보를 수정합니다."
+        summary = "닉네임 수정",
+        description = "사용자의 닉네임을 수정합니다."
     )
-    @PutMapping("/{deviceId}/profile")
-    fun updateProfile(
+    @PatchMapping("/{deviceId}/nickname")
+    fun updateNickname(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @PathVariable deviceId: String,
-        @Valid @RequestBody request: MemberUpdateRequest
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String,
+        @Valid @RequestBody request: NicknameUpdateRequest
     ): ApiResponse<MemberResponse> {
-        val result = memberService.updateMemberInfo(deviceId, request)
+        val result = memberService.updateNickname(deviceId, request.nickname)
+        return ApiResponse.success(result)
+    }
+
+    /**
+     * 기본 위치 정보 수정
+     */
+    @Operation(
+        summary = "기본 위치 정보 수정",
+        description = "사용자의 기본 위치 정보(위도, 경도, 지역명)를 수정합니다."
+    )
+    @PatchMapping("/{deviceId}/location")
+    fun updateLocation(
+        @Parameter(description = "디바이스 고유 식별자", required = true)
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String,
+        @Valid @RequestBody request: LocationUpdateRequest
+    ): ApiResponse<MemberResponse> {
+        val result = memberService.updateLocation(deviceId, request)
         return ApiResponse.success(result)
     }
 
@@ -109,7 +126,7 @@ class MemberController(
     @GetMapping("/{deviceId}/weather-preference/status")
     fun checkSetupStatus(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @PathVariable deviceId: String
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String
     ): ApiResponse<Map<String, Boolean>> {
         val isCompleted = memberService.isWeatherPreferenceSetupCompleted(deviceId)
         val result = mapOf("isSetupCompleted" to isCompleted)
@@ -126,7 +143,7 @@ class MemberController(
     @DeleteMapping("/{deviceId}")
     fun deactivateMember(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @PathVariable deviceId: String
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String
     ): ApiResponse<MemberResponse> {
         val result = memberService.deactivateMember(deviceId)
         return ApiResponse.success(result)
