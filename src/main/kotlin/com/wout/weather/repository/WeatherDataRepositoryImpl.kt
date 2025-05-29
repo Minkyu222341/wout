@@ -183,7 +183,7 @@ class WeatherDataRepositoryImpl(
      */
     private fun cityNameEq(cityName: String?): BooleanExpression? {
         return if (!cityName.isNullOrBlank()) {
-            weatherData.cityName.eq(cityName)
+            weatherData.cityName.contains(cityName)
         } else null
     }
 }

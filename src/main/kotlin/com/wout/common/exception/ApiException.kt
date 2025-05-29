@@ -32,7 +32,10 @@ enum class ErrorCode(
     // 날씨 관련 에러
     WEATHER_API_ERROR(500, "W001", "날씨 API 호출 중 오류가 발생했습니다."),
     WEATHER_DATA_NOT_FOUND(404, "W002", "날씨 데이터를 찾을 수 없습니다."),
+    WEATHER_PREFERENCE_ALREADY_EXISTS(409, "W002", "이미 날씨 선호도가 설정되어 있습니다"),
 
-    // 민감도 관련 에러
-    INVALID_SENSITIVITY_VALUE(400, "S001", "유효하지 않은 민감도 값입니다. 1-5 사이의 값을 입력해주세요.")
+    // 회원 관련 에러 추가
+    MEMBER_NOT_FOUND(404, "M001", "회원을 찾을 수 없습니다."),
+    DEVICE_ALREADY_EXISTS(400, "M002", "이미 등록된 디바이스입니다."),
+    SENSITIVITY_PROFILE_NOT_FOUND(404, "M003", "민감도 프로필을 찾을 수 없습니다.");
 }
