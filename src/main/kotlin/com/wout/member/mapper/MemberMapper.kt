@@ -1,6 +1,5 @@
 package com.wout.member.mapper
 
-import com.wout.member.dto.request.MemberCreateRequest
 import com.wout.member.dto.response.MemberResponse
 import com.wout.member.entity.Member
 import org.springframework.stereotype.Component
@@ -19,22 +18,7 @@ import org.springframework.stereotype.Component
 @Component
 class MemberMapper {
 
-    /**
-     * CreateRequest -> Entity 변환
-     */
-    fun toEntity(request: MemberCreateRequest): Member {
-        return Member.create(
-            deviceId = request.deviceId,
-            nickname = request.nickname,
-            latitude = request.latitude,
-            longitude = request.longitude,
-            cityName = request.cityName
-        )
-    }
 
-    /**
-     * Entity -> Response 변환
-     */
     fun toResponse(member: Member): MemberResponse {
         return MemberResponse(
             id = member.id,
@@ -48,12 +32,5 @@ class MemberMapper {
             createdAt = member.createdAt,
             updatedAt = member.updatedAt
         )
-    }
-
-    /**
-     * Entity List -> Response List 변환
-     */
-    fun toResponseList(members: List<Member>): List<MemberResponse> {
-        return members.map { toResponse(it) }
     }
 }

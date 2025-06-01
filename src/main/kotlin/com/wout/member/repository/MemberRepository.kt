@@ -2,7 +2,6 @@ package com.wout.member.repository
 
 import com.wout.member.entity.Member
 import org.springframework.data.jpa.repository.JpaRepository
-import java.util.*
 
 /**
  * packageName    : com.wout.member.repository
@@ -20,7 +19,7 @@ interface MemberRepository : JpaRepository<Member, Long> {
     /**
      * deviceId로 회원 조회 (앱 실행 시 기존 사용자 확인용)
      */
-    fun findByDeviceId(deviceId: String): Optional<Member>
+    fun findByDeviceId(deviceId: String): Member?
 
     /**
      * deviceId 존재 여부 확인 (중복 가입 방지용)

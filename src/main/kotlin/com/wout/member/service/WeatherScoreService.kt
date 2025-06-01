@@ -6,9 +6,11 @@ import com.wout.member.dto.response.ElementScoreDetails
 import com.wout.member.dto.response.LocationInfo
 import com.wout.member.dto.response.WeatherInfo
 import com.wout.member.dto.response.WeatherScoreResponse
+import com.wout.member.entity.Member
 import com.wout.member.entity.WeatherPreference
 import com.wout.member.repository.MemberRepository
 import com.wout.member.repository.WeatherPreferenceRepository
+import com.wout.member.util.WeatherMessage
 import com.wout.member.util.WeatherScoreCalculator
 import com.wout.member.util.WeatherScoreResult
 import com.wout.weather.entity.WeatherData
@@ -26,13 +28,15 @@ import org.springframework.transaction.annotation.Transactional
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-05-27        MinKyu Park       최초 생성
- * 2025-05-27        MinKyu Park       LocationInfo import 추가
  * 2025-05-29        MinKyu Park       WeatherScoreResponse 생성 로직 공통화
+ * 2025-05-31        MinKyu Park       코딩 규칙에 맞게 리팩토링
+ * 2025-05-31        MinKyu Park       메시지 처리 로직을 WeatherMessage로 분리
  */
 @Service
 @Transactional(readOnly = true)
 class WeatherScoreService(
     private val weatherScoreCalculator: WeatherScoreCalculator,
+    private val weatherMessage: WeatherMessage,
     private val memberRepository: MemberRepository,
     private val weatherPreferenceRepository: WeatherPreferenceRepository,
     private val weatherService: WeatherService
@@ -46,34 +50,99 @@ class WeatherScoreService(
         latitude: Double,
         longitude: Double
     ): WeatherScoreResponse {
+        validateDeviceId(deviceId)
+        validateCoordinates(latitude, longitude)
+
+        val member = findMemberByDeviceId(deviceId)
+        val weatherPreference = findWeatherPreferenceByMemberId(member.id)
+        val weatherData = getWeatherDataSafely(latitude, longitude)
+
+        return calculateAndBuildResponse(weatherData, weatherPreference, latitude, longitude)
+    }
+
+    /**
+     * 도시명 기반 날씨 점수 계산
+     */
+    fun getPersonalizedWeatherScoreByCity(
+        deviceId: String,
+        cityName: String
+    ): WeatherScoreResponse {
+        validateDeviceId(deviceId)
+        validateCityName(cityName)
+
+        val member = findMemberByDeviceId(deviceId)
+        val weatherPreference = findWeatherPreferenceByMemberId(member.id)
+        val weatherData = getWeatherDataSafelyByCity(cityName)
+
+        return calculateAndBuildResponse(
+            weatherData,
+            weatherPreference,
+            weatherData.latitude,
+            weatherData.longitude
+        )
+    }
+
+    // ===== 입력값 검증 메서드들 =====
+
+    private fun validateDeviceId(deviceId: String) {
         if (deviceId.isBlank()) {
             throw ApiException(INVALID_INPUT_VALUE)
         }
+    }
 
-        // 위도/경도 유효성 검증
-        if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) {
+    private fun validateCoordinates(latitude: Double, longitude: Double) {
+        if (latitude !in -90.0..90.0) {
             throw ApiException(INVALID_INPUT_VALUE)
         }
+        if (longitude !in -180.0..180.0) {
+            throw ApiException(INVALID_INPUT_VALUE)
+        }
+    }
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(MEMBER_NOT_FOUND) }
+    private fun validateCityName(cityName: String) {
+        if (cityName.isBlank()) {
+            throw ApiException(INVALID_INPUT_VALUE)
+        }
+    }
 
-        val weatherPreference = weatherPreferenceRepository.findByMemberId(member.id)
-            .orElseThrow { ApiException(SENSITIVITY_PROFILE_NOT_FOUND) }
+    // ===== 공통 조회 메서드들 =====
 
-        val weatherData = try {
+    private fun findMemberByDeviceId(deviceId: String): Member {
+        return memberRepository.findByDeviceId(deviceId) ?: throw ApiException(MEMBER_NOT_FOUND)
+    }
+
+    private fun findWeatherPreferenceByMemberId(memberId: Long): WeatherPreference {
+        return weatherPreferenceRepository.findByMemberId(memberId)
+            ?: throw ApiException(SENSITIVITY_PROFILE_NOT_FOUND)
+    }
+
+    private fun getWeatherDataSafely(latitude: Double, longitude: Double): WeatherData {
+        return try {
             weatherService.getCurrentWeatherData(latitude, longitude)
         } catch (e: Exception) {
             throw ApiException(WEATHER_DATA_NOT_FOUND)
         }
+    }
 
-        // 개인화된 점수 계산
-        val scoreResult = calculatePersonalizedScore(weatherData, weatherPreference)
+    private fun getWeatherDataSafelyByCity(cityName: String): WeatherData {
+        return try {
+            weatherService.getCurrentWeatherDataByCity(cityName)
+        } catch (e: Exception) {
+            throw ApiException(WEATHER_DATA_NOT_FOUND)
+        }
+    }
 
-        // 개인화된 메시지 생성
-        val personalizedMessage = generatePersonalizedMessage(scoreResult, weatherPreference)
+    // ===== 핵심 비즈니스 로직 =====
 
-        // ✅ 공통 메서드로 응답 생성
+    private fun calculateAndBuildResponse(
+        weatherData: WeatherData,
+        weatherPreference: WeatherPreference,
+        latitude: Double,
+        longitude: Double
+    ): WeatherScoreResponse {
+        val scoreResult = calculatePersonalizedScoreSafely(weatherData, weatherPreference)
+        val personalizedMessage = weatherMessage.generatePersonalizedMessage(scoreResult, weatherPreference)
+
         return buildWeatherScoreResponse(
             scoreResult = scoreResult,
             personalizedMessage = personalizedMessage,
@@ -84,52 +153,25 @@ class WeatherScoreService(
         )
     }
 
-    /**
-     * 도시명 기반 날씨 점수 계산
-     */
-    fun getPersonalizedWeatherScoreByCity(
-        deviceId: String,
-        cityName: String
-    ): WeatherScoreResponse {
-        if (deviceId.isBlank() || cityName.isBlank()) {
-            throw ApiException(INVALID_INPUT_VALUE)
-        }
-
-        // 1. 사용자 조회
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(MEMBER_NOT_FOUND) }
-
-        // 2. 날씨 선호도 조회
-        val weatherPreference = weatherPreferenceRepository.findByMemberId(member.id)
-            .orElseThrow { ApiException(SENSITIVITY_PROFILE_NOT_FOUND) }
-
-        // 3. 도시명으로 날씨 데이터 조회
-        val weatherData = try {
-            weatherService.getCurrentWeatherDataByCity(cityName)
+    private fun calculatePersonalizedScoreSafely(
+        weatherData: WeatherData,
+        weatherPreference: WeatherPreference
+    ): WeatherScoreResult {
+        return try {
+            weatherScoreCalculator.calculateTotalScore(
+                temperature = weatherData.temperature,
+                humidity = weatherData.humidity.toDouble(),
+                windSpeed = weatherData.windSpeed,
+                uvIndex = weatherData.uvIndex ?: 0.0,
+                pm25 = weatherData.pm25 ?: 0.0,
+                pm10 = weatherData.pm10 ?: 0.0,
+                weatherPreference = weatherPreference
+            )
         } catch (e: Exception) {
-            throw ApiException(WEATHER_DATA_NOT_FOUND)
+            throw ApiException(INTERNAL_SERVER_ERROR)
         }
-
-        // 4. 개인화된 점수 계산
-        val scoreResult = calculatePersonalizedScore(weatherData, weatherPreference)
-
-        // 5. 개인화된 메시지 생성
-        val personalizedMessage = generatePersonalizedMessage(scoreResult, weatherPreference)
-
-        // ✅ 공통 메서드로 응답 생성
-        return buildWeatherScoreResponse(
-            scoreResult = scoreResult,
-            personalizedMessage = personalizedMessage,
-            weatherData = weatherData,
-            weatherPreference = weatherPreference,
-            latitude = weatherData.latitude,
-            longitude = weatherData.longitude
-        )
     }
 
-    /**
-     * WeatherScoreResponse 생성 공통 메서드
-     */
     private fun buildWeatherScoreResponse(
         scoreResult: WeatherScoreResult,
         personalizedMessage: String,
@@ -168,72 +210,5 @@ class WeatherScoreService(
                 cityName = weatherData.cityName
             )
         )
-    }
-
-    /**
-     * 개인화된 점수 계산 (내부 메서드)
-     */
-    private fun calculatePersonalizedScore(
-        weatherData: WeatherData,
-        weatherPreference: WeatherPreference
-    ): WeatherScoreResult {
-        return try {
-            weatherScoreCalculator.calculateTotalScore(
-                temperature = weatherData.temperature,
-                humidity = weatherData.humidity.toDouble(),
-                windSpeed = weatherData.windSpeed,
-                uvIndex = weatherData.uvIndex ?: 0.0,
-                pm25 = weatherData.pm25 ?: 0.0,
-                pm10 = weatherData.pm10 ?: 0.0,
-                weatherPreference = weatherPreference
-            )
-        } catch (e: Exception) {
-            throw ApiException(INTERNAL_SERVER_ERROR)
-        }
-    }
-
-    /**
-     * 개인화된 메시지 생성
-     */
-    private fun generatePersonalizedMessage(
-        scoreResult: WeatherScoreResult,
-        weatherPreference: WeatherPreference
-    ): String {
-        val score = scoreResult.totalScore.toInt()
-        val grade = scoreResult.grade
-
-        // 기본 메시지
-        val baseMessage = "${grade.emoji} ${score}점. ${grade.description}"
-
-        // 개인 특성 추출
-        val personalTraits = mutableListOf<String>()
-        val priorities = weatherPreference.getPriorityList()
-
-        // 우선순위 기반 특성 추출
-        priorities.forEach { priority ->
-            when (priority) {
-                "heat" -> personalTraits.add("더위를 싫어하시는데")
-                "cold" -> personalTraits.add("추위를 많이 타시는 편이라")
-                "humidity" -> personalTraits.add("습함을 특히 싫어하시는데")
-                "wind" -> personalTraits.add("바람에 민감하시는데")
-                "uv" -> personalTraits.add("자외선에 예민하셔서")
-                "pollution" -> personalTraits.add("공기질에 민감하시는데")
-            }
-        }
-
-        // 상황 분석 및 결론 생성
-        val situationAndConclusion = when {
-            score >= 90 -> "날씨 조건이 완벽해서 외출하기 좋은 날이에요!"
-            score >= 70 -> "전반적으로 괜찮은 날씨예요."
-            score >= 50 -> "보통 수준의 날씨입니다."
-            score >= 30 -> "조금 아쉬운 날씨네요."
-            else -> "외출 시 주의가 필요해 보여요."
-        }
-
-        return if (personalTraits.isNotEmpty()) {
-            "$baseMessage ${personalTraits.first()} $situationAndConclusion"
-        } else {
-            "$baseMessage $situationAndConclusion"
-        }
     }
 }

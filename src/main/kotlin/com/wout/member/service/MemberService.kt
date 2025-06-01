@@ -1,7 +1,7 @@
 package com.wout.member.service
 
 import com.wout.common.exception.ApiException
-import com.wout.common.exception.ErrorCode
+import com.wout.common.exception.ErrorCode.*
 import com.wout.member.dto.request.LocationUpdateRequest
 import com.wout.member.dto.request.MemberCreateRequest
 import com.wout.member.dto.request.WeatherPreferenceSetupRequest
@@ -21,12 +21,13 @@ import org.springframework.transaction.annotation.Transactional
  * packageName    : com.wout.member.service
  * fileName       : MemberService
  * author         : MinKyu Park
- * date           : 2025-05-27
- * description    : 회원 관리 비즈니스 로직 처리
+ * date           : 2025-06-01
+ * description    : 회원 관리 비즈니스 로직 처리 (개발 가이드 준수)
  * ===========================================================
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-05-27        MinKyu Park       최초 생성
+ * 2025-06-01        MinKyu Park       개발 가이드에 맞게 수정
  */
 @Service
 @Transactional(readOnly = true)
@@ -42,25 +43,17 @@ class MemberService(
      */
     @Transactional
     fun getOrCreateMember(request: MemberCreateRequest): MemberWithPreferenceResponse {
-        val deviceId = request.deviceId
+        // 1) 입력값 검증
+        validateDeviceId(request.deviceId)
 
+        // 2) 데이터 조회 (기존 사용자 확인)
+        val member = memberRepository.findByDeviceId(request.deviceId)
+            ?: createAndSaveMember(request)
 
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
-
-        // 기존 사용자 확인
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseGet {
-                // 없으면 자동 회원가입
-                val newMember = Member.create(deviceId)
-                memberRepository.save(newMember)
-            }
-
-        // 날씨 선호도 확인
+        // 3) 날씨 선호도 조회
         val weatherPreference = weatherPreferenceRepository.findByMemberId(member.id)
-            .orElse(null)
 
+        // 4) 응답 생성
         return weatherPreferenceMapper.toMemberWithPreferenceResponse(member, weatherPreference)
     }
 
@@ -68,13 +61,13 @@ class MemberService(
      * 회원 정보 조회 (deviceId 기반)
      */
     fun getMemberByDeviceId(deviceId: String): MemberResponse {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
+        // 2) 데이터 조회
+        val member = findMemberByDeviceId(deviceId)
 
+        // 3) 응답 생성
         return memberMapper.toResponse(member)
     }
 
@@ -82,31 +75,33 @@ class MemberService(
      * 회원 정보 + 날씨 선호도 통합 조회
      */
     fun getMemberWithPreference(deviceId: String): MemberWithPreferenceResponse {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
-
+        // 2) 데이터 조회
+        val member = findMemberByDeviceId(deviceId)
         val weatherPreference = weatherPreferenceRepository.findByMemberId(member.id)
-            .orElse(null)
 
+        // 3) 응답 생성
         return weatherPreferenceMapper.toMemberWithPreferenceResponse(member, weatherPreference)
     }
-
 
     /**
      * 닉네임 수정
      */
     @Transactional
     fun updateNickname(deviceId: String, nickname: String): MemberResponse {
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
+
+        // 2) 데이터 조회
         val member = findMemberByDeviceId(deviceId)
 
-        // ✅ 닉네임 업데이트만 집중
+        // 3) 도메인 로직 실행 (엔티티에 위임)
         val updatedMember = member.updateNickname(nickname)
-        val savedMember = memberRepository.save(updatedMember)
 
+        // 4) 저장 및 응답
+        val savedMember = memberRepository.save(updatedMember)
         return memberMapper.toResponse(savedMember)
     }
 
@@ -115,25 +110,22 @@ class MemberService(
      */
     @Transactional
     fun updateLocation(deviceId: String, request: LocationUpdateRequest): MemberResponse {
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
+
+        // 2) 데이터 조회
         val member = findMemberByDeviceId(deviceId)
 
-        // ✅ 위치 정보 업데이트만 집중
+        // 3) 도메인 로직 실행 (엔티티에 위임)
         val updatedMember = member.updateDefaultLocation(
             latitude = request.latitude,
             longitude = request.longitude,
             cityName = request.cityName
         )
+
+        // 4) 저장 및 응답
         val savedMember = memberRepository.save(updatedMember)
-
         return memberMapper.toResponse(savedMember)
-    }
-
-    /**
-     * 공통 회원 조회 메서드
-     */
-    private fun findMemberByDeviceId(deviceId: String): Member {
-        return memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND, "회원을 찾을 수 없습니다: $deviceId") }
     }
 
     /**
@@ -141,24 +133,19 @@ class MemberService(
      */
     @Transactional
     fun setupWeatherPreference(deviceId: String, request: WeatherPreferenceSetupRequest): WeatherPreferenceResponse {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
+        validateWeatherPreferenceSetupRequest(request)
 
-        if (!request.isValidPriorities()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 2) 데이터 조회
+        val member = findMemberByDeviceId(deviceId)
+        validateWeatherPreferenceNotExists(member.id)
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
-
-        if (weatherPreferenceRepository.existsByMemberId(member.id)) {
-            throw ApiException(ErrorCode.WEATHER_PREFERENCE_ALREADY_EXISTS)
-        }
-
+        // 3) 비즈니스 로직 실행
         val weatherPreference = weatherPreferenceMapper.toEntity(member.id, request)
-        val savedPreference = weatherPreferenceRepository.save(weatherPreference)
 
+        // 4) 저장 및 응답
+        val savedPreference = weatherPreferenceRepository.save(weatherPreference)
         return weatherPreferenceMapper.toResponse(savedPreference)
     }
 
@@ -170,23 +157,26 @@ class MemberService(
         deviceId: String,
         request: WeatherPreferenceUpdateRequest
     ): WeatherPreferenceResponse {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
+        validateWeatherPreferenceUpdateRequest(request)
 
-        if (!request.hasUpdates()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 2) 데이터 조회
+        val member = findMemberByDeviceId(deviceId)
+        val existingPreference = findWeatherPreferenceByMemberId(member.id)
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
+        // 3) 도메인 로직 실행 (엔티티에 위임)
+        val updatedPreference = existingPreference.update(
+            comfortTemperature = request.comfortTemperature,
+            temperatureWeight = request.temperatureWeight,
+            humidityWeight = request.humidityWeight,
+            windWeight = request.windWeight,
+            uvWeight = request.uvWeight,
+            airQualityWeight = request.airQualityWeight
+        )
 
-        val existingPreference = weatherPreferenceRepository.findByMemberId(member.id)
-            .orElseThrow { ApiException(ErrorCode.SENSITIVITY_PROFILE_NOT_FOUND) }
-
-        val updatedPreference = weatherPreferenceMapper.updateEntity(existingPreference, request)
+        // 4) 저장 및 응답
         val savedPreference = weatherPreferenceRepository.save(updatedPreference)
-
         return weatherPreferenceMapper.toResponse(savedPreference)
     }
 
@@ -194,16 +184,14 @@ class MemberService(
      * 날씨 선호도 조회
      */
     fun getWeatherPreference(deviceId: String): WeatherPreferenceResponse {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
+        // 2) 데이터 조회
+        val member = findMemberByDeviceId(deviceId)
+        val weatherPreference = findWeatherPreferenceByMemberId(member.id)
 
-        val weatherPreference = weatherPreferenceRepository.findByMemberId(member.id)
-            .orElseThrow { ApiException(ErrorCode.SENSITIVITY_PROFILE_NOT_FOUND) }
-
+        // 3) 응답 생성
         return weatherPreferenceMapper.toResponse(weatherPreference)
     }
 
@@ -212,16 +200,17 @@ class MemberService(
      */
     @Transactional
     fun deactivateMember(deviceId: String): MemberResponse {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
+        // 2) 데이터 조회
+        val member = findMemberByDeviceId(deviceId)
 
+        // 3) 도메인 로직 실행 (엔티티에 위임)
         val deactivatedMember = member.deactivate()
-        val savedMember = memberRepository.save(deactivatedMember)
 
+        // 4) 저장 및 응답
+        val savedMember = memberRepository.save(deactivatedMember)
         return memberMapper.toResponse(savedMember)
     }
 
@@ -234,16 +223,14 @@ class MemberService(
         windSpeed: Double,
         humidity: Double
     ): Double {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        // 1) 입력값 검증
+        validateDeviceId(deviceId)
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElseThrow { ApiException(ErrorCode.MEMBER_NOT_FOUND) }
+        // 2) 데이터 조회
+        val member = findMemberByDeviceId(deviceId)
+        val weatherPreference = findWeatherPreferenceByMemberId(member.id)
 
-        val weatherPreference = weatherPreferenceRepository.findByMemberId(member.id)
-            .orElseThrow { ApiException(ErrorCode.SENSITIVITY_PROFILE_NOT_FOUND) }
-
+        // 3) 도메인 로직 실행 (엔티티에 위임)
         return weatherPreference.calculateFeelsLikeTemperature(actualTemp, windSpeed, humidity)
     }
 
@@ -251,15 +238,57 @@ class MemberService(
      * 5단계 설정 완료 여부 확인
      */
     fun isWeatherPreferenceSetupCompleted(deviceId: String): Boolean {
-        if (deviceId.isBlank()) {
-            throw ApiException(ErrorCode.INVALID_INPUT_VALUE)
-        }
+        if (deviceId.isBlank()) return false
 
-        val member = memberRepository.findByDeviceId(deviceId)
-            .orElse(null) ?: return false
+        val member = memberRepository.findByDeviceId(deviceId) ?: return false
 
         return weatherPreferenceRepository.findByMemberId(member.id)
-            .map { it.isSetupCompleted }
-            .orElse(false)
+            ?.isSetupCompleted ?: false
+    }
+
+    // ===== 입력값 검증 메서드들 =====
+
+    private fun validateDeviceId(deviceId: String) {
+        if (deviceId.isBlank()) {
+            throw ApiException(INVALID_INPUT_VALUE)
+        }
+    }
+
+    private fun validateWeatherPreferenceSetupRequest(request: WeatherPreferenceSetupRequest) {
+        if (!request.isValidPriorities()) {
+            throw ApiException(INVALID_INPUT_VALUE)
+        }
+    }
+
+    private fun validateWeatherPreferenceUpdateRequest(request: WeatherPreferenceUpdateRequest) {
+        if (!request.hasUpdates()) {
+            throw ApiException(INVALID_INPUT_VALUE)
+        }
+    }
+
+    private fun validateWeatherPreferenceNotExists(memberId: Long) {
+        if (weatherPreferenceRepository.existsByMemberId(memberId)) {
+            throw ApiException(WEATHER_PREFERENCE_ALREADY_EXISTS)
+        }
+    }
+
+    // ===== 공통 조회 메서드들 =====
+
+    private fun findMemberByDeviceId(deviceId: String): Member {
+        return memberRepository.findByDeviceId(deviceId)
+            ?: throw ApiException(MEMBER_NOT_FOUND)
+    }
+
+    private fun findWeatherPreferenceByMemberId(memberId: Long): com.wout.member.entity.WeatherPreference {
+        return weatherPreferenceRepository.findByMemberId(memberId)
+            ?: throw ApiException(SENSITIVITY_PROFILE_NOT_FOUND)
+    }
+
+    // ===== 비즈니스 로직 메서드들 =====
+
+    private fun createAndSaveMember(request: MemberCreateRequest): Member {
+        // Member.from() 팩토리 메서드 사용
+        val newMember = Member.from(request)
+        return memberRepository.save(newMember)
     }
 }
