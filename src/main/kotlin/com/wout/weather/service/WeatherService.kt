@@ -1,6 +1,7 @@
 package com.wout.weather.service
 
 import com.wout.common.exception.ApiException
+import com.wout.common.exception.ErrorCode.INVALID_INPUT_VALUE
 import com.wout.common.exception.ErrorCode.WEATHER_DATA_NOT_FOUND
 import com.wout.weather.dto.response.WeatherResponse
 import com.wout.weather.dto.response.WeatherSummary
@@ -11,6 +12,7 @@ import com.wout.weather.repository.WeatherDataRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import java.util.Locale
 
 /**
  * packageName    : com.wout.weather.service
@@ -25,6 +27,7 @@ import java.time.LocalDateTime
  * 25. 5. 24.        MinKyu Park       WeatherMapper 적용, 중복 로직 제거
  * 25. 5. 25.        MinKyu Park       ApiException 통일, WeatherSummary DTO 적용
  * 25. 5. 31.        MinKyu Park       서비스 규칙 준수 리팩토링
+ * 2025. 6. 2.       MinKyu Park       검증 메서드 에러 코드 수정 (INVALID_INPUT_VALUE)
  */
 @Service
 @Transactional(readOnly = true)
@@ -116,16 +119,16 @@ class WeatherService(
 
     private fun validateCoordinates(lat: Double, lon: Double) {
         if (lat !in -90.0..90.0) {
-            throw ApiException(WEATHER_DATA_NOT_FOUND)
+            throw ApiException(INVALID_INPUT_VALUE)  // ✅ 수정: WEATHER_DATA_NOT_FOUND → INVALID_INPUT_VALUE
         }
         if (lon !in -180.0..180.0) {
-            throw ApiException(WEATHER_DATA_NOT_FOUND)
+            throw ApiException(INVALID_INPUT_VALUE)  // ✅ 수정: WEATHER_DATA_NOT_FOUND → INVALID_INPUT_VALUE
         }
     }
 
     private fun validateCityName(cityName: String) {
         if (cityName.isBlank()) {
-            throw ApiException(WEATHER_DATA_NOT_FOUND)
+            throw ApiException(INVALID_INPUT_VALUE)  // ✅ 수정: WEATHER_DATA_NOT_FOUND → INVALID_INPUT_VALUE
         }
     }
 
@@ -225,14 +228,14 @@ class WeatherService(
     }
 
     private fun formatTemperature(temperature: Double): Double {
-        return String.format("%.1f", temperature).toDouble()
+        return String.format(Locale.US, "%.1f", temperature).toDouble()  // ✅ Locale 명시로 환경 독립성 보장
     }
 
     private fun formatHumidity(humidity: Double): Double {
-        return String.format("%.1f", humidity).toDouble()
+        return String.format(Locale.US, "%.1f", humidity).toDouble()  // ✅ Locale 명시로 환경 독립성 보장
     }
 
     private fun formatWindSpeed(windSpeed: Double): Double {
-        return String.format("%.1f", windSpeed).toDouble()
+        return String.format(Locale.US, "%.1f", windSpeed).toDouble()  // ✅ Locale 명시로 환경 독립성 보장
     }
 }

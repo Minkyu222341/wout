@@ -14,6 +14,6 @@ package com.wout.feedback.dto.response
 data class LearningProgress(
     val totalAdjustment: Double,
     val averageAdjustmentPerFeedback: Double,
-    val trend: String,  // "IMPROVING", "STABLE", "DECLINING"
+    val trend: LearningTrend,
     val accuracyScore: Double
 )

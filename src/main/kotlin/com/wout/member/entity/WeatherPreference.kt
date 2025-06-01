@@ -317,7 +317,8 @@ class WeatherPreference private constructor(
         var feelsLikeTemp = actualTemp
 
         // 1. Wind Chill 계산 (10°C 이하에서만 적용)
-        if (actualTemp <= 10.0 && windSpeed > 1.6) {
+        // ✅ 수정: 표준 NWS 기준 3 mph (1.34 m/s) 적용
+        if (actualTemp <= 10.0 && windSpeed >= 1.34) {
             feelsLikeTemp = 13.12 + 0.6215 * actualTemp -
                     11.37 * windSpeed.pow(0.16) +
                     0.3965 * actualTemp * windSpeed.pow(0.16)

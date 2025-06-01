@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component
  * -----------------------------------------------------------
  * 2025-06-01        MinKyu Park       최초 생성
  * 2025-06-01        MinKyu Park       가이드 v2.0 적용 (도메인 로직 활용)
+ * 2025-06-02        MinKyu Park       LearningTrend enum 반영
+ * 2025-06-02        MinKyu Park       null-safe 처리 및 홀수 데이터 처리 개선
  */
 @Component
 class FeedbackMapper {
@@ -78,6 +80,7 @@ class FeedbackMapper {
 
     /**
      * List<Feedback> → FeedbackStatisticsResponse 변환 (복잡한 통계 계산)
+     * ✅ 개선: null-safe average 처리
      */
     fun toStatisticsResponse(
         feedbacks: List<Feedback>,
@@ -92,10 +95,11 @@ class FeedbackMapper {
         val temperatureAnalysis = calculateTemperatureAnalysis(feedbacks)
 
         return FeedbackStatisticsResponse(
-            period = "최근 ${days}일",  // 동적 설정
+            period = "최근 ${days}일",  // TODO: i18n when needed
             totalFeedbackCount = feedbacks.size,
             feedbackDistribution = distribution,
-            averageReliabilityScore = feedbacks.map { it.calculateReliabilityScore() }.average(),
+            averageReliabilityScore = feedbacks.map { it.calculateReliabilityScore() }
+                .takeIf { it.isNotEmpty() }?.average() ?: 0.0,  // ✅ null-safe 처리
             learningProgress = learningProgress,
             temperatureAnalysis = temperatureAnalysis,
             lastFeedbackDate = feedbacks.maxByOrNull { it.createdAt }?.createdAt
@@ -144,13 +148,13 @@ class FeedbackMapper {
     private fun calculateLearningProgress(feedbacks: List<Feedback>): LearningProgress {
         val totalAdjustment = feedbacks.sumOf { it.adjustmentAmount }
         val averageAdjustment = if (feedbacks.isNotEmpty()) totalAdjustment / feedbacks.size else 0.0
-        val trend = determineTrend(feedbacks)
+        val trend = determineTrend(feedbacks)  // LearningTrend enum 반환
         val accuracyScore = calculateAccuracyScore(feedbacks)
 
         return LearningProgress(
             totalAdjustment = totalAdjustment,
             averageAdjustmentPerFeedback = averageAdjustment,
-            trend = trend,
+            trend = trend,  // LearningTrend enum
             accuracyScore = accuracyScore
         )
     }
@@ -181,21 +185,24 @@ class FeedbackMapper {
     // ===== 헬퍼 메서드들 =====
 
     /**
-     * 학습 트렌드 결정
+     * 학습 트렌드 결정 (LearningTrend enum 반환)
+     * ✅ 개선: 홀수 데이터 처리 명확화
      */
-    private fun determineTrend(feedbacks: List<Feedback>): String {
-        if (feedbacks.size < 3) return "INSUFFICIENT_DATA"
+    private fun determineTrend(feedbacks: List<Feedback>): LearningTrend {
+        if (feedbacks.size < 3) return LearningTrend.STABLE
 
-        val recent = feedbacks.takeLast(feedbacks.size / 2)
-        val earlier = feedbacks.take(feedbacks.size / 2)
+        // ✅ 개선: 홀수 처리 명확화 - 중간 데이터는 제외하고 명확하게 반반으로 나눔
+        val halfSize = feedbacks.size / 2
+        val recent = feedbacks.takeLast(halfSize)   // 최근 절반
+        val earlier = feedbacks.take(halfSize)      // 이전 절반 (홀수면 중간 1개 제외)
 
         val recentPerfectRatio = recent.count { it.isPositiveFeedback() }.toDouble() / recent.size
         val earlierPerfectRatio = earlier.count { it.isPositiveFeedback() }.toDouble() / earlier.size
 
         return when {
-            recentPerfectRatio > earlierPerfectRatio + 0.1 -> "IMPROVING"
-            recentPerfectRatio < earlierPerfectRatio - 0.1 -> "DECLINING"
-            else -> "STABLE"
+            recentPerfectRatio > earlierPerfectRatio + 0.1 -> LearningTrend.IMPROVING
+            recentPerfectRatio < earlierPerfectRatio - 0.1 -> LearningTrend.DECLINING
+            else -> LearningTrend.STABLE
         }
     }
 
@@ -216,7 +223,7 @@ class FeedbackMapper {
         val perfectFeedbacks = feedbacks.filter { it.isPositiveFeedback() } // 도메인 로직 활용
 
         if (perfectFeedbacks.isEmpty()) {
-            return "데이터 부족"
+            return "데이터 부족"  // TODO: i18n when needed
         }
 
         val temperatures = perfectFeedbacks.map { it.actualTemperature }
@@ -235,12 +242,17 @@ class FeedbackMapper {
      */
     private fun createEmptyStatistics(days: Int): FeedbackStatisticsResponse {
         return FeedbackStatisticsResponse(
-            period = "최근 ${days}일",
+            period = "최근 ${days}일",  // TODO: i18n when needed
             totalFeedbackCount = 0,
             feedbackDistribution = FeedbackDistribution(0, 0, 0, 0, 0),
             averageReliabilityScore = 0.0,
-            learningProgress = LearningProgress(0.0, 0.0, "NO_DATA", 0.0),
-            temperatureAnalysis = TemperatureAnalysis(0.0, 0.0, 0.0, "데이터 없음"),
+            learningProgress = LearningProgress(
+                totalAdjustment = 0.0,
+                averageAdjustmentPerFeedback = 0.0,
+                trend = LearningTrend.STABLE,  // enum 사용 (데이터 없을 때 안정적)
+                accuracyScore = 0.0
+            ),
+            temperatureAnalysis = TemperatureAnalysis(0.0, 0.0, 0.0, "데이터 없음"),  // TODO: i18n when needed
             lastFeedbackDate = null
         )
     }

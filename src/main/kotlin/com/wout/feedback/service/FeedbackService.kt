@@ -14,6 +14,7 @@ import com.wout.member.entity.Member
 import com.wout.member.entity.WeatherPreference
 import com.wout.member.repository.MemberRepository
 import com.wout.member.repository.WeatherPreferenceRepository
+import com.wout.member.util.WeatherScoreCalculator
 import com.wout.weather.entity.WeatherData
 import com.wout.weather.repository.WeatherDataRepository
 import org.springframework.data.domain.Pageable
@@ -32,6 +33,7 @@ import java.time.LocalDateTime
  * -----------------------------------------------------------
  * 2025-06-01        MinKyu Park       최초 생성 (MVP 필수 기능만)
  * 2025-06-01        MinKyu Park       가이드 v2.0 적용 (Orchestrator 역할)
+ * 2025-06-02        MinKyu Park       코드 리뷰 반영 (에러 코드, 트랜잭션, 학습 로직 수정)
  */
 @Service
 @Transactional(readOnly = true)
@@ -40,6 +42,7 @@ class FeedbackService(
     private val memberRepository: MemberRepository,
     private val weatherPreferenceRepository: WeatherPreferenceRepository,
     private val weatherDataRepository: WeatherDataRepository,
+    private val weatherScoreCalculator: WeatherScoreCalculator,  // ✅ 추가: 실제 점수 계산용
     private val feedbackMapper: FeedbackMapper
 ) {
 
@@ -78,7 +81,7 @@ class FeedbackService(
 
         // 5) 저장 및 즉시 학습 적용
         val savedFeedback = feedbackRepository.save(feedback)
-        applyImmediateLearning(weatherPreference, savedFeedback) // 서비스 책임
+        applyImmediateLearning(weatherPreference, savedFeedback) // ✅ 수정: @Transactional 제거로 동일 트랜잭션에서 실행
 
         return feedbackMapper.toResponse(savedFeedback)
     }
@@ -152,7 +155,7 @@ class FeedbackService(
 
     private fun validateDuplicateFeedback(memberId: Long, weatherDataId: Long) {
         if (feedbackRepository.existsByMemberIdAndWeatherDataId(memberId, weatherDataId)) {
-            throw ApiException(INVALID_INPUT_VALUE) // DUPLICATE_FEEDBACK 대신 기존 에러 사용
+            throw ApiException(DUPLICATE_FEEDBACK)  // ✅ 수정: INVALID_INPUT_VALUE → DUPLICATE_FEEDBACK
         }
     }
 
@@ -192,13 +195,16 @@ class FeedbackService(
             humidity = weatherData.humidity.toDouble()
         )
 
+        // ✅ 수정: 실제 날씨 점수 계산 (하드코딩 85 제거)
+        val actualWeatherScore = calculateActualWeatherScore(weatherData, weatherPreference)
+
         return Feedback.create(
             memberId = member.id,
             weatherDataId = request.weatherDataId,
             feedbackType = FeedbackType.fromString(request.feedbackType),
             actualTemperature = weatherData.temperature,
-            feelsLikeTemperature = personalizedFeelsLike, // 개인화된 체감온도 사용
-            weatherScore = 85, // WeatherData에 score 필드가 없으므로 임시값
+            feelsLikeTemperature = personalizedFeelsLike,
+            weatherScore = actualWeatherScore,  // ✅ 실제 계산된 점수 사용
             previousComfortTemp = weatherPreference.comfortTemperature,
             comments = request.comments,
             isConfirmed = request.isConfirmed
@@ -206,9 +212,29 @@ class FeedbackService(
     }
 
     /**
-     * 즉시 학습 적용 (여러 엔티티 조합 필요 - 서비스 책임)
+     * 실제 날씨 점수 계산
+     * WeatherScoreCalculator 발생하는 예외는 그대로 전파
      */
-    @Transactional
+    private fun calculateActualWeatherScore(
+        weatherData: WeatherData,
+        weatherPreference: WeatherPreference
+    ): Int {
+        val weatherScoreResult = weatherScoreCalculator.calculateTotalScore(
+            temperature = weatherData.temperature,
+            humidity = weatherData.humidity.toDouble(),
+            windSpeed = weatherData.windSpeed,
+            uvIndex = weatherData.uvIndex ?: 0.0,
+            pm25 = weatherData.pm25 ?: 0.0,
+            pm10 = weatherData.pm10 ?: 0.0,
+            weatherPreference = weatherPreference
+        )
+        return weatherScoreResult.totalScore.toInt()
+    }
+
+    /**
+     * 즉시 학습 적용 (여러 엔티티 조합 필요 - 서비스 책임)
+     * ✅ 수정: @Transactional 제거로 중첩 트랜잭션 방지
+     */
     fun applyImmediateLearning(preference: WeatherPreference, feedback: Feedback) {
         // 피드백의 신뢰도가 충분한지 확인 (도메인 로직 활용)
         if (!feedback.needsTemperatureAdjustment()) {
@@ -220,22 +246,21 @@ class FeedbackService(
             return // 신뢰도가 낮으면 학습 스킵
         }
 
-        // WeatherPreference 업데이트 (기존 엔티티 메서드 사용)
         val updatedPreference = when {
             feedback.isColdFeedback() -> {
-                // 추위 피드백: 쾌적온도를 낮춰서 더 추위에 민감하게
+                // 추위 피드백: 쾌적온도를 높여서 더 따뜻해야 쾌적하다고 학습
                 val adjustment = (feedback.adjustmentAmount * learningWeight).toInt()
                 preference.update(
                     comfortTemperature = (preference.comfortTemperature + adjustment).coerceIn(10, 30),
-                    temperatureWeight = (preference.temperatureWeight + 2).coerceIn(1, 100) // 가중치도 증가
+                    temperatureWeight = (preference.temperatureWeight + 2).coerceIn(30, 70)  // ✅ 수정: 30-70 범위
                 )
             }
             feedback.isHotFeedback() -> {
-                // 더위 피드백: 쾌적온도를 높여서 더 더위에 민감하게
+                // 더위 피드백: 쾌적온도를 낮춰서 더 시원해야 쾌적하다고 학습
                 val adjustment = (feedback.adjustmentAmount * learningWeight).toInt()
                 preference.update(
-                    comfortTemperature = (preference.comfortTemperature + adjustment).coerceIn(10, 30),
-                    temperatureWeight = (preference.temperatureWeight + 2).coerceIn(1, 100) // 가중치도 증가
+                    comfortTemperature = (preference.comfortTemperature - adjustment).coerceIn(10, 30),  // ✅ 수정: 빼기로 변경
+                    temperatureWeight = (preference.temperatureWeight + 2).coerceIn(30, 70)  // ✅ 수정: 30-70 범위
                 )
             }
             else -> preference // 완벽한 피드백은 변경 없음
