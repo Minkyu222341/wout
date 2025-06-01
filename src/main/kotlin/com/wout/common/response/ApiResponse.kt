@@ -1,6 +1,5 @@
 package com.wout.common.response
 
-import com.fasterxml.jackson.annotation.JsonInclude
 import io.swagger.v3.oas.annotations.media.Schema
 
 /**
@@ -15,7 +14,6 @@ import io.swagger.v3.oas.annotations.media.Schema
  * 25. 5. 21.        MinKyu Park       최초 생성
  */
 @Schema(description = "API 응답 래퍼")
-@JsonInclude(JsonInclude.Include.NON_NULL)
 data class ApiResponse<T>(
     @Schema(description = "요청 성공 여부", example = "true")
     val success: Boolean,

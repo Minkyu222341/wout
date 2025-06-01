@@ -24,6 +24,7 @@ import java.time.LocalDateTime
  * 25. 5. 21.        MinKyu Park       최초 생성
  * 25. 5. 24.        MinKyu Park       WeatherMapper 적용, 중복 로직 제거
  * 25. 5. 25.        MinKyu Park       ApiException 통일, WeatherSummary DTO 적용
+ * 25. 5. 31.        MinKyu Park       서비스 규칙 준수 리팩토링
  */
 @Service
 @Transactional(readOnly = true)
@@ -32,43 +33,129 @@ class WeatherService(
     private val weatherMapper: WeatherMapper
 ) {
 
+    companion object {
+        private const val WEATHER_CACHE_HOURS = 1L
+        private const val WEATHER_HISTORY_HOURS = 24L
+        private const val WEATHER_SUMMARY_HOURS = 1L
+        private const val ALL_CITIES_CACHE_HOURS = 2L
+        private const val HIGH_TEMPERATURE_THRESHOLD = 25.0
+        private const val LOW_TEMPERATURE_THRESHOLD = 10.0
+        private const val TEMPERATURE_DIFF_THRESHOLD = 15.0
+    }
+
+    // ===== 공개 API 메서드들 =====
+
     /**
      * 사용자 위치 기반 날씨 정보 조회
      */
     fun getWeatherByLocation(userLat: Double, userLon: Double): WeatherResponse {
-        val nearestCity = KoreanMajorCity.findNearestCity(userLat, userLon)
-
-        val weatherData = weatherRepository.findLatestByCityName(
-            cityName = nearestCity.cityName,
-            since = LocalDateTime.now().minusHours(1)
-        ) ?: weatherRepository.findLatestByCityName(nearestCity.cityName)
-        ?: throw ApiException(
-            WEATHER_DATA_NOT_FOUND,
-            WEATHER_DATA_NOT_FOUND.message
-        )
-
-        return weatherMapper.toResponseDto(weatherData)
+        validateCoordinates(userLat, userLon)
+        val nearestCity = findNearestCity(userLat, userLon)
+        val weatherData = findLatestWeatherDataSafely(nearestCity.cityName)
+        return buildWeatherResponse(weatherData)
     }
 
     /**
      * 특정 도시의 날씨 정보 조회
      */
     fun getWeatherByCity(cityName: String): WeatherResponse {
-        val weatherData = weatherRepository.findLatestByCityName(cityName)
-            ?: throw ApiException(
-                WEATHER_DATA_NOT_FOUND,
-                WEATHER_DATA_NOT_FOUND.message
-            )
-
-        return weatherMapper.toResponseDto(weatherData)
+        validateCityName(cityName)
+        val weatherData = findWeatherDataByCitySafely(cityName)
+        return buildWeatherResponse(weatherData)
     }
 
     /**
      * 모든 주요 도시의 날씨 정보 조회
      */
     fun getAllMajorCitiesWeather(): List<WeatherResponse> {
-        val since = LocalDateTime.now().minusHours(2)
+        val since = LocalDateTime.now().minusHours(ALL_CITIES_CACHE_HOURS)
+        return processAllCitiesWeather(since)
+    }
 
+    /**
+     * 특정 도시의 날씨 히스토리 조회 (최근 24시간)
+     */
+    fun getWeatherHistory(cityName: String): List<WeatherResponse> {
+        validateCityName(cityName)
+        val weatherHistoryList = findWeatherHistorySafely(cityName)
+        return buildWeatherHistoryResponse(weatherHistoryList)
+    }
+
+    /**
+     * 현재 날씨 상태 요약 정보 조회
+     */
+    fun getWeatherSummary(): WeatherSummary {
+        val since = LocalDateTime.now().minusHours(WEATHER_SUMMARY_HOURS)
+        val allCitiesWeather = weatherRepository.findLatestWeatherForAllCities(since)
+
+        return if (allCitiesWeather.isEmpty()) {
+            createEmptyWeatherSummary()
+        } else {
+            calculateWeatherSummary(allCitiesWeather)
+        }
+    }
+
+    /**
+     * 위도/경도 기반 WeatherData 엔티티 조회 (WeatherScoreService용)
+     */
+    fun getCurrentWeatherData(userLat: Double, userLon: Double): WeatherData {
+        validateCoordinates(userLat, userLon)
+        val nearestCity = findNearestCity(userLat, userLon)
+        return findLatestWeatherDataSafely(nearestCity.cityName)
+    }
+
+    /**
+     * 도시명 기반 WeatherData 엔티티 조회 (WeatherScoreService용)
+     */
+    fun getCurrentWeatherDataByCity(cityName: String): WeatherData {
+        validateCityName(cityName)
+        return findWeatherDataByCitySafely(cityName)
+    }
+
+    // ===== 입력값 검증 메서드들 =====
+
+    private fun validateCoordinates(lat: Double, lon: Double) {
+        if (lat !in -90.0..90.0) {
+            throw ApiException(WEATHER_DATA_NOT_FOUND)
+        }
+        if (lon !in -180.0..180.0) {
+            throw ApiException(WEATHER_DATA_NOT_FOUND)
+        }
+    }
+
+    private fun validateCityName(cityName: String) {
+        if (cityName.isBlank()) {
+            throw ApiException(WEATHER_DATA_NOT_FOUND)
+        }
+    }
+
+    // ===== 공통 조회 메서드들 =====
+
+    private fun findNearestCity(userLat: Double, userLon: Double): KoreanMajorCity {
+        return KoreanMajorCity.findNearestCity(userLat, userLon)
+    }
+
+    private fun findLatestWeatherDataSafely(cityName: String): WeatherData {
+        val since = LocalDateTime.now().minusHours(WEATHER_CACHE_HOURS)
+        return weatherRepository.findLatestByCityName(cityName, since)
+            ?: weatherRepository.findLatestByCityName(cityName)
+            ?: throw ApiException(WEATHER_DATA_NOT_FOUND)
+    }
+
+    private fun findWeatherDataByCitySafely(cityName: String): WeatherData {
+        return weatherRepository.findLatestByCityName(cityName)
+            ?: throw ApiException(WEATHER_DATA_NOT_FOUND)
+    }
+
+    private fun findWeatherHistorySafely(cityName: String): List<WeatherData> {
+        val now = LocalDateTime.now()
+        val yesterday = now.minusHours(WEATHER_HISTORY_HOURS)
+        return weatherRepository.findByCityNameAndDateRange(cityName, yesterday, now)
+    }
+
+    // ===== 핵심 비즈니스 로직 =====
+
+    private fun processAllCitiesWeather(since: LocalDateTime): List<WeatherResponse> {
         return KoreanMajorCity.entries.mapNotNull { city ->
             weatherRepository.findLatestByCityName(city.cityName, since)?.let {
                 weatherMapper.toResponseDto(it)
@@ -76,64 +163,26 @@ class WeatherService(
         }
     }
 
-    /**
-     * 특정 도시의 날씨 히스토리 조회 (최근 24시간)
-     */
-    fun getWeatherHistory(cityName: String): List<WeatherResponse> {
-        val now = LocalDateTime.now()
-        val yesterday = now.minusHours(24)
+    private fun calculateWeatherSummary(weatherDataList: List<WeatherData>): WeatherSummary {
+        val avgTemperature = weatherDataList.map { it.temperature }.average()
+        val maxTemperature = weatherDataList.maxOf { it.temperature }
+        val minTemperature = weatherDataList.minOf { it.temperature }
+        val avgHumidity = weatherDataList.map { it.humidity }.average()
+        val avgWindSpeed = weatherDataList.map { it.windSpeed }.average()
 
-        return weatherRepository.findByCityNameAndDateRange(cityName, yesterday, now)
-            .map { weatherMapper.toResponseDto(it) }
-    }
+        val maxTempCity = weatherDataList.maxByOrNull { it.temperature }?.cityName ?: ""
+        val minTempCity = weatherDataList.minByOrNull { it.temperature }?.cityName ?: ""
+        val lastUpdated = weatherDataList.maxOf { it.createdAt }
 
-    /**
-     * 현재 날씨 상태 요약 정보 조회
-     */
-    fun getWeatherSummary(): WeatherSummary {
-        val since = LocalDateTime.now().minusHours(1)
-        val allCitiesWeather = weatherRepository.findLatestWeatherForAllCities(since)
-
-        if (allCitiesWeather.isEmpty()) {
-            return WeatherSummary(
-                availableCities = 0,
-                averageTemperature = 0.0,
-                maxTemperature = 0.0,
-                minTemperature = 0.0,
-                averageHumidity = 0.0,
-                averageWindSpeed = 0.0,
-                maxTemperatureCity = "",
-                minTemperatureCity = "",
-                lastUpdated = LocalDateTime.now(),
-                message = "현재 날씨 데이터를 조회할 수 없습니다."
-            )
-        }
-
-        val avgTemperature = allCitiesWeather.map { it.temperature }.average()
-        val maxTemperature = allCitiesWeather.maxOf { it.temperature }
-        val minTemperature = allCitiesWeather.minOf { it.temperature }
-        val avgHumidity = allCitiesWeather.map { it.humidity }.average()
-        val avgWindSpeed = allCitiesWeather.map { it.windSpeed }.average()
-
-        val maxTempCity = allCitiesWeather.maxByOrNull { it.temperature }?.cityName ?: ""
-        val minTempCity = allCitiesWeather.minByOrNull { it.temperature }?.cityName ?: ""
-        val lastUpdated = allCitiesWeather.maxOf { it.createdAt }
-
-        // 날씨 상황에 따른 메시지 생성
-        val message = when {
-            avgTemperature >= 25 -> "전국적으로 더운 날씨입니다"
-            avgTemperature <= 10 -> "전국적으로 추운 날씨입니다"
-            maxTemperature - minTemperature >= 15 -> "지역별 기온차가 큰 날씨입니다"
-            else -> "전국적으로 쾌적한 날씨입니다"
-        }
+        val message = generateWeatherMessage(avgTemperature, maxTemperature, minTemperature)
 
         return WeatherSummary(
-            availableCities = allCitiesWeather.size,
-            averageTemperature = String.format("%.1f", avgTemperature).toDouble(),
+            availableCities = weatherDataList.size,
+            averageTemperature = formatTemperature(avgTemperature),
             maxTemperature = maxTemperature,
             minTemperature = minTemperature,
-            averageHumidity = String.format("%.1f", avgHumidity).toDouble(),
-            averageWindSpeed = String.format("%.1f", avgWindSpeed).toDouble(),
+            averageHumidity = formatHumidity(avgHumidity),
+            averageWindSpeed = formatWindSpeed(avgWindSpeed),
             maxTemperatureCity = maxTempCity,
             minTemperatureCity = minTempCity,
             lastUpdated = lastUpdated,
@@ -141,30 +190,49 @@ class WeatherService(
         )
     }
 
-    /**
-     * 위도/경도 기반 WeatherData 엔티티 조회 (WeatherScoreService용)
-     */
-    fun getCurrentWeatherData(userLat: Double, userLon: Double): WeatherData {
-        val nearestCity = KoreanMajorCity.findNearestCity(userLat, userLon)
+    private fun generateWeatherMessage(avgTemp: Double, maxTemp: Double, minTemp: Double): String {
+        return when {
+            avgTemp >= HIGH_TEMPERATURE_THRESHOLD -> "전국적으로 더운 날씨입니다"
+            avgTemp <= LOW_TEMPERATURE_THRESHOLD -> "전국적으로 추운 날씨입니다"
+            maxTemp - minTemp >= TEMPERATURE_DIFF_THRESHOLD -> "지역별 기온차가 큰 날씨입니다"
+            else -> "전국적으로 쾌적한 날씨입니다"
+        }
+    }
 
-        return weatherRepository.findLatestByCityName(
-            cityName = nearestCity.cityName,
-            since = LocalDateTime.now().minusHours(1)
-        ) ?: weatherRepository.findLatestByCityName(nearestCity.cityName)
-        ?: throw ApiException(
-            WEATHER_DATA_NOT_FOUND,
-            WEATHER_DATA_NOT_FOUND.message
+    // ===== 응답 생성 메서드들 =====
+
+    private fun buildWeatherResponse(weatherData: WeatherData): WeatherResponse {
+        return weatherMapper.toResponseDto(weatherData)
+    }
+
+    private fun buildWeatherHistoryResponse(weatherDataList: List<WeatherData>): List<WeatherResponse> {
+        return weatherDataList.map { weatherMapper.toResponseDto(it) }
+    }
+
+    private fun createEmptyWeatherSummary(): WeatherSummary {
+        return WeatherSummary(
+            availableCities = 0,
+            averageTemperature = 0.0,
+            maxTemperature = 0.0,
+            minTemperature = 0.0,
+            averageHumidity = 0.0,
+            averageWindSpeed = 0.0,
+            maxTemperatureCity = "",
+            minTemperatureCity = "",
+            lastUpdated = LocalDateTime.now(),
+            message = "현재 날씨 데이터를 조회할 수 없습니다."
         )
     }
 
-    /**
-     * 도시명 기반 WeatherData 엔티티 조회 (WeatherScoreService용)
-     */
-    fun getCurrentWeatherDataByCity(cityName: String): WeatherData {
-        return weatherRepository.findLatestByCityName(cityName)
-            ?: throw ApiException(
-                WEATHER_DATA_NOT_FOUND,
-                WEATHER_DATA_NOT_FOUND.message
-            )
+    private fun formatTemperature(temperature: Double): Double {
+        return String.format("%.1f", temperature).toDouble()
+    }
+
+    private fun formatHumidity(humidity: Double): Double {
+        return String.format("%.1f", humidity).toDouble()
+    }
+
+    private fun formatWindSpeed(windSpeed: Double): Double {
+        return String.format("%.1f", windSpeed).toDouble()
     }
 }
