@@ -4,6 +4,7 @@ import com.wout.member.entity.WeatherPreference
 import com.wout.outfit.entity.enums.BottomCategory
 import com.wout.outfit.entity.enums.OuterCategory
 import com.wout.outfit.entity.enums.TopCategory
+import com.wout.outfit.entity.enums.WeatherCondition
 import com.wout.weather.entity.WeatherData
 import org.springframework.stereotype.Component
 
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component
  * -----------------------------------------------------------
  * 2025-06-02        MinKyu Park       최초 생성
  * 2025-06-03        MinKyu Park       OutfitRecommendationEngine 연동 강화
+ * 2025-06-03        MinKyu Park       WeatherCondition Enum 적용으로 타입 안전성 확보
  */
 @Component
 class OutfitItemDatabase {
@@ -86,18 +88,18 @@ class OutfitItemDatabase {
     }
 
     /**
-     * 🆕 특정 날씨 상황에 맞는 상의 아이템 조회 (추천 엔진 연동용)
+     * 🔧 리팩토링: WeatherCondition Enum 적용한 상의 아이템 조회
      */
     fun getTopItemsForWeather(
         category: TopCategory,
-        weatherCondition: String,
+        weatherCondition: WeatherCondition,
         preferences: WeatherPreference,
         temperature: Double
     ): List<String> {
         val baseItems = getTopItems(category, temperature, preferences).toMutableList()
 
         return when (weatherCondition) {
-            "extreme_cold" -> {
+            WeatherCondition.EXTREME_COLD -> {
                 // 극한 추위용 특화 아이템
                 when (category) {
                     TopCategory.THICK_SWEATER -> listOf("두꺼운 니트", "목폴라", "기모 후드티")
@@ -105,7 +107,7 @@ class OutfitItemDatabase {
                     else -> baseItems
                 }
             }
-            "cold_sensitive" -> {
+            WeatherCondition.COLD_SENSITIVE -> {
                 // 추위 민감형용 레이어드 아이템
                 baseItems.map {
                     when {
@@ -115,55 +117,55 @@ class OutfitItemDatabase {
                     }
                 }
             }
-            "humidity_resistant" -> {
+            WeatherCondition.HUMIDITY_RESISTANT -> {
                 // 습도 민감형용 속건 아이템
                 listOf("속건 반팔", "메시 티셔츠", "린넨 셔츠")
             }
-            "heat_extreme" -> {
+            WeatherCondition.HEAT_EXTREME -> {
                 // 극한 더위용 쿨링 아이템
                 listOf("민소매", "쿨링 반팔", "얇은 나시")
             }
-            else -> baseItems
+            WeatherCondition.PERFECT_WEATHER -> baseItems
         }.take(3) // 추천용으로 3개까지만
     }
 
     /**
-     * 🆕 특정 날씨 상황에 맞는 하의 아이템 조회 (추천 엔진 연동용)
+     * 🔧 리팩토링: WeatherCondition Enum 적용한 하의 아이템 조회
      */
     fun getBottomItemsForWeather(
         category: BottomCategory,
-        weatherCondition: String,
+        weatherCondition: WeatherCondition,
         preferences: WeatherPreference,
         temperature: Double
     ): List<String> {
         val baseItems = getBottomItems(category, temperature, preferences).toMutableList()
 
         return when (weatherCondition) {
-            "extreme_cold" -> {
+            WeatherCondition.EXTREME_COLD -> {
                 when (category) {
                     BottomCategory.THERMAL_PANTS -> listOf("기모 청바지", "패딩 바지", "털안감 슬랙스")
                     else -> baseItems
                 }
             }
-            "cold_sensitive" -> {
+            WeatherCondition.COLD_SENSITIVE -> {
                 baseItems.map { "히트텍 레깅스 + $it" }
             }
-            "humidity_resistant" -> {
+            WeatherCondition.HUMIDITY_RESISTANT -> {
                 listOf("속건 7부 팬츠", "린넨 바지", "쿨맥스 레깅스")
             }
-            "heat_extreme" -> {
+            WeatherCondition.HEAT_EXTREME -> {
                 listOf("반바지", "쿨링 쇼츠", "짧은 원피스")
             }
-            else -> baseItems
+            WeatherCondition.PERFECT_WEATHER -> baseItems
         }.take(3)
     }
 
     /**
-     * 🆕 특정 날씨 상황에 맞는 외투 아이템 조회 (추천 엔진 연동용)
+     * 🔧 리팩토링: WeatherCondition Enum 적용한 외투 아이템 조회
      */
     fun getOuterItemsForWeather(
         category: OuterCategory?,
-        weatherCondition: String,
+        weatherCondition: WeatherCondition,
         weatherData: WeatherData,
         preferences: WeatherPreference,
         temperature: Double
@@ -173,7 +175,7 @@ class OutfitItemDatabase {
         val baseItems = getOuterItems(category, temperature, preferences).toMutableList()
 
         return when (weatherCondition) {
-            "extreme_cold" -> {
+            WeatherCondition.EXTREME_COLD -> {
                 when (category) {
                     OuterCategory.PADDING -> {
                         if (weatherData.windSpeed >= 5.0) {
@@ -185,27 +187,27 @@ class OutfitItemDatabase {
                     else -> baseItems
                 }
             }
-            "cold_sensitive" -> {
+            WeatherCondition.COLD_SENSITIVE -> {
                 when (category) {
                     OuterCategory.PADDING -> listOf("두꺼운 패딩", "퍼 코트", "구스다운")
                     else -> baseItems
                 }
             }
-            "humidity_resistant" -> {
+            WeatherCondition.HUMIDITY_RESISTANT -> {
                 listOf("통풍 자켓")
             }
-            "heat_extreme" -> {
+            WeatherCondition.HEAT_EXTREME -> {
                 listOf("자외선 차단복")
             }
-            else -> baseItems
+            WeatherCondition.PERFECT_WEATHER -> baseItems
         }.take(3)
     }
 
     /**
-     * 🆕 특정 날씨 상황에 맞는 소품 아이템 조회 (추천 엔진 연동용)
+     * 🔧 리팩토링: WeatherCondition Enum 적용한 소품 아이템 조회
      */
     fun getAccessoryItemsForWeather(
-        weatherCondition: String,
+        weatherCondition: WeatherCondition,
         weatherData: WeatherData,
         preferences: WeatherPreference,
         temperature: Double
@@ -213,7 +215,7 @@ class OutfitItemDatabase {
         val accessories = mutableListOf<String>()
 
         when (weatherCondition) {
-            "extreme_cold" -> {
+            WeatherCondition.EXTREME_COLD -> {
                 accessories.addAll(listOf("목도리", "장갑", "모자"))
                 if (weatherData.windSpeed >= 5.0) {
                     accessories.add("방풍 마스크")
@@ -221,30 +223,26 @@ class OutfitItemDatabase {
                     accessories.add("마스크")
                 }
             }
-            "cold_sensitive" -> {
+            WeatherCondition.COLD_SENSITIVE -> {
                 accessories.addAll(listOf("털모자", "터치장갑", "목도리", "핫팩"))
             }
-            "perfect_weather" -> {
+            WeatherCondition.PERFECT_WEATHER -> {
                 if (weatherData.uvIndex != null && weatherData.uvIndex!! >= 6.0) {
                     accessories.addAll(listOf("선글라스", "모자"))
                 } else {
                     accessories.add("선글라스")
                 }
             }
-            "humidity_resistant" -> {
+            WeatherCondition.HUMIDITY_RESISTANT -> {
                 accessories.addAll(listOf("메시 모자", "쿨타월"))
             }
-            "heat_extreme" -> {
+            WeatherCondition.HEAT_EXTREME -> {
                 accessories.addAll(listOf("넓은 모자", "선글라스"))
                 if (weatherData.uvIndex != null && weatherData.uvIndex!! >= 8.0) {
                     accessories.addAll(listOf("쿨토시", "휴대용 선풍기", "자외선 차단 크림"))
                 } else {
                     accessories.addAll(listOf("쿨토시", "휴대용 선풍기"))
                 }
-            }
-            else -> {
-                // 기본 소품 추천
-                accessories.addAll(getAccessoryItems(temperature, weatherData, preferences))
             }
         }
 

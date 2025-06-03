@@ -158,16 +158,6 @@ class WeatherPreference private constructor(
         private fun validateWeight(weight: Int, name: String) {
             require(weight in 1..100) { "${name} 가중치는 1-100 사이여야 합니다" }
         }
-
-        private fun validateLocation(latitude: Double?, longitude: Double?) {
-            if (latitude != null || longitude != null) {
-                require(latitude != null && longitude != null) {
-                    "위도와 경도는 함께 설정되어야 합니다"
-                }
-                require(latitude in -90.0..90.0) { "위도는 -90~90 범위여야 합니다" }
-                require(longitude in -180.0..180.0) { "경도는 -180~180 범위여야 합니다" }
-            }
-        }
     }
 
     // ===== 도메인 로직 (상태 변경) =====
@@ -346,23 +336,7 @@ class WeatherPreference private constructor(
 
         return traits
     }
-
-    /**
-     * 개인화 메시지 생성을 위한 주요 특성 반환
-     */
-    fun getPrimaryTrait(): String? {
-        return when {
-            isColdSensitive() && comfortTemperature >= 24 -> "극도로 추위를 타시는데"
-            isColdSensitive() -> "추위를 많이 타시는데"
-            isHeatSensitive() && comfortTemperature <= 14 -> "극도로 더위를 타시는데"
-            isHeatSensitive() -> "더위를 많이 타시는데"
-            isHumiditySensitive() && humidityReaction == "high" -> "습함을 특히 싫어하시는데"
-            isUVSensitive() && skinReaction == "high" -> "자외선에 매우 예민하셔서"
-            isWindSensitive() && windWeight >= 80 -> "바람을 특히 싫어하시는데"
-            else -> null
-        }
-    }
-
+    
     /**
      * 온도 구간별 민감도 보정값 계산
      * 개인 특성에 따라 온도 구간을 조정하여 더 정확한 카테고리 선택
