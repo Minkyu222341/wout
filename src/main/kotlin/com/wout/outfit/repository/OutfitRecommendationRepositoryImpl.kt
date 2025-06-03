@@ -83,7 +83,7 @@ class OutfitRecommendationRepositoryImpl(
                     OutfitRecommendationStats::class.java,
                     outfitRecommendation.weatherScore.divide(10).multiply(10).stringValue().concat("점대"),
                     outfitRecommendation.count(),
-                    outfitRecommendation._confidenceScore.avg()
+                    outfitRecommendation.confidenceScore.avg()
                 )
             )
             .from(outfitRecommendation)
@@ -116,7 +116,7 @@ class OutfitRecommendationRepositoryImpl(
                 outfitRecommendation.feelsLikeTemperature.between(feelsLikeMin, feelsLikeMax)
             )
             .orderBy(
-                outfitRecommendation._confidenceScore.desc(),
+                outfitRecommendation.confidenceScore.desc(),
                 outfitRecommendation.createdAt.desc()
             )
             .limit(limit.toLong())
@@ -137,12 +137,12 @@ class OutfitRecommendationRepositoryImpl(
 
     private fun topCategoryIn(topCategories: List<TopCategory>?): BooleanExpression? {
         return topCategories?.takeIf { it.isNotEmpty() }?.let {
-            outfitRecommendation._topCategory.`in`(it)
+            outfitRecommendation.topCategory.`in`(it)
         }
     }
 
     private fun confidenceScoreGoe(minConfidenceScore: Int?): BooleanExpression? {
-        return minConfidenceScore?.let { outfitRecommendation._confidenceScore.goe(it) }
+        return minConfidenceScore?.let { outfitRecommendation.confidenceScore.goe(it) }
     }
 
     private fun createdAtAfter(fromDate: LocalDateTime?): BooleanExpression? {
