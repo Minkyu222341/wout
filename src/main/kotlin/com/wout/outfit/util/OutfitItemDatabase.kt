@@ -352,6 +352,7 @@ class OutfitItemDatabase {
                 pm25Value >= 150 -> items.addAll(listOf("KF94 마스크", "공기정화 목걸이", "보호안경"))
                 pm25Value >= 75 -> items.addAll(listOf("KF94 마스크", "목걸이"))
                 pm25Value >= 35 -> items.add("마스크")
+                else -> Unit  // ✅ 명시적으로 아무것도 하지 않음
             }
         }
 
