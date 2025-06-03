@@ -1,6 +1,7 @@
 package com.wout.outfit.entity
 
 import com.wout.common.entity.BaseTimeEntity
+import com.wout.common.util.JsonUtils
 import com.wout.outfit.entity.enums.BottomCategory
 import com.wout.outfit.entity.enums.OuterCategory
 import com.wout.outfit.entity.enums.TopCategory
@@ -14,12 +15,13 @@ import kotlin.math.roundToInt
  * fileName       : OutfitRecommendation
  * author         : MinKyu Park
  * date           : 2025-06-02
- * description    : 아웃핏 추천 엔티티 (언더바 제거, QueryDSL 최적화)
+ * description    : 아웃핏 추천 엔티티 (Jackson 기반 안전한 JSON 처리)
  * ===========================================================
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-06-02        MinKyu Park       최초 생성
  * 2025-06-03        MinKyu Park       언더바 제거, 불변성 강화, QueryDSL 친화적으로 개선
+ * 2025-06-04        MinKyu Park       JsonUtils 도입으로 안전한 JSON 처리
  */
 @Entity
 class OutfitRecommendation private constructor(
@@ -104,7 +106,7 @@ class OutfitRecommendation private constructor(
 
     companion object {
         /**
-         * 추천 생성 팩토리 메서드
+         * 추천 생성 팩토리 메서드 - JsonUtils 활용
          */
         fun create(
             memberId: Long,
@@ -139,18 +141,21 @@ class OutfitRecommendation private constructor(
                 feelsLikeTemperature = feelsLikeTemperature,
                 weatherScore = weatherScore,
                 topCategory = topCategory,
-                topItems = convertToJson(topItems),
+                topItems = JsonUtils.toJson(topItems),                     // ✅ JsonUtils 사용
                 bottomCategory = bottomCategory,
-                bottomItems = convertToJson(bottomItems),
+                bottomItems = JsonUtils.toJson(bottomItems),               // ✅ JsonUtils 사용
                 outerCategory = outerCategory,
-                outerItems = outerItems?.let { convertToJson(it) },
-                accessoryItems = accessoryItems?.let { convertToJson(it) },
+                outerItems = JsonUtils.toJsonOrNull(outerItems),           // ✅ JsonUtils 사용 (null 처리)
+                accessoryItems = JsonUtils.toJsonOrNull(accessoryItems),   // ✅ JsonUtils 사용 (null 처리)
                 recommendationReason = recommendationReason,
                 personalTip = personalTip,
                 confidenceScore = confidenceScore
             )
         }
 
+        /**
+         * 추천 신뢰도 점수 계산
+         */
         private fun calculateConfidenceScore(weatherScore: Int, feelsLike: Double, actual: Double): Int {
             val baseScore = when {
                 weatherScore >= 80 -> 95  // 좋은 날씨는 높은 신뢰도
@@ -165,10 +170,27 @@ class OutfitRecommendation private constructor(
 
             return (baseScore - penaltyScore).coerceIn(50, 100)
         }
+    }
 
-        private fun convertToJson(items: List<String>): String {
-            return items.joinToString(",", "[", "]") { "\"$it\"" }
-        }
+    // ===== 도메인 로직 (JsonUtils 기반 안전한 JSON 처리) =====
+
+    /**
+     * JSON 문자열을 리스트로 변환 - JsonUtils 사용
+     */
+    fun getTopItemsList(): List<String> {
+        return JsonUtils.fromJson(topItems)                        // ✅ JsonUtils 사용
+    }
+
+    fun getBottomItemsList(): List<String> {
+        return JsonUtils.fromJson(bottomItems)                     // ✅ JsonUtils 사용
+    }
+
+    fun getOuterItemsList(): List<String> {
+        return outerItems?.let { JsonUtils.fromJson(it) } ?: emptyList()
+    }
+
+    fun getAccessoryItemsList(): List<String> {
+        return accessoryItems?.let { JsonUtils.fromJson(it) } ?: emptyList()
     }
 
     // ===== 도메인 로직 (개인 속성 기반) =====
@@ -193,17 +215,17 @@ class OutfitRecommendation private constructor(
     }
 
     /**
-     * 실제로 외투가 추천되었는지 확인
+     * 실제로 외투가 추천되었는지 확인 - JsonUtils 활용
      */
     fun hasOuterwearRecommendation(): Boolean {
-        return outerCategory != null && !outerItems.isNullOrBlank() && outerItems != "[]"
+        return outerCategory != null && !JsonUtils.isEmptyJsonArray(outerItems)
     }
 
     /**
-     * 소품 추천이 있는지 확인
+     * 소품 추천이 있는지 확인 - JsonUtils 활용
      */
     fun hasAccessoryRecommendation(): Boolean {
-        return !accessoryItems.isNullOrBlank() && accessoryItems != "[]"
+        return !JsonUtils.isEmptyJsonArray(accessoryItems)
     }
 
     /**
@@ -237,80 +259,54 @@ class OutfitRecommendation private constructor(
     }
 
     /**
-     * JSON 문자열을 리스트로 변환
-     */
-    fun getTopItemsList(): List<String> {
-        return parseJsonToList(topItems)
-    }
-
-    fun getBottomItemsList(): List<String> {
-        return parseJsonToList(bottomItems)
-    }
-
-    fun getOuterItemsList(): List<String> {
-        return outerItems?.let { parseJsonToList(it) } ?: emptyList()
-    }
-
-    fun getAccessoryItemsList(): List<String> {
-        return accessoryItems?.let { parseJsonToList(it) } ?: emptyList()
-    }
-
-    private fun parseJsonToList(json: String): List<String> {
-        return json.removeSurrounding("[", "]")
-            .split(",")
-            .map { it.trim().removeSurrounding("\"") }
-            .filter { it.isNotBlank() }
-    }
-
-    /**
-     * 전체 추천 아이템 개수 반환
+     * 전체 추천 아이템 개수 반환 - JsonUtils 활용
      */
     fun getTotalItemCount(): Int {
-        return getTopItemsList().size +
-                getBottomItemsList().size +
-                getOuterItemsList().size +
-                getAccessoryItemsList().size
+        return JsonUtils.getItemCount(topItems) +
+                JsonUtils.getItemCount(bottomItems) +
+                JsonUtils.getItemCount(outerItems) +
+                JsonUtils.getItemCount(accessoryItems)
     }
 
     /**
-     * 추천 요약 메시지 생성
+     * 추천 요약 메시지 생성 - JsonUtils 활용
      */
     fun generateSummaryMessage(): String {
         val topItemsText = getTopItemsList().take(2).joinToString(", ")
-        val bottomItemsText = getBottomItemsList().firstOrNull() ?: ""
-        val outerText = getOuterItemsList().firstOrNull()?.let { " + $it" } ?: ""
+        val bottomItemsText = JsonUtils.getFirstItem(bottomItems) ?: ""
+        val outerText = JsonUtils.getFirstItem(outerItems)?.let { " + $it" } ?: ""
 
         return "$topItemsText + $bottomItemsText$outerText"
     }
 
     /**
-     * 상세 추천 메시지 생성
+     * 상세 추천 메시지 생성 - JsonUtils 활용
      */
     fun generateDetailedMessage(): String {
         val parts = mutableListOf<String>()
 
         // 상의
-        val topItems = getTopItemsList()
-        if (topItems.isNotEmpty()) {
-            parts.add("상의: ${topItems.joinToString(", ")}")
+        val topItemsText = JsonUtils.toReadableString(topItems)
+        if (topItemsText.isNotBlank()) {
+            parts.add("상의: $topItemsText")
         }
 
         // 하의
-        val bottomItems = getBottomItemsList()
-        if (bottomItems.isNotEmpty()) {
-            parts.add("하의: ${bottomItems.joinToString(", ")}")
+        val bottomItemsText = JsonUtils.toReadableString(bottomItems)
+        if (bottomItemsText.isNotBlank()) {
+            parts.add("하의: $bottomItemsText")
         }
 
         // 외투
-        val outerItems = getOuterItemsList()
-        if (outerItems.isNotEmpty()) {
-            parts.add("외투: ${outerItems.joinToString(", ")}")
+        val outerItemsText = JsonUtils.toReadableString(outerItems)
+        if (outerItemsText.isNotBlank()) {
+            parts.add("외투: $outerItemsText")
         }
 
         // 소품
-        val accessoryItems = getAccessoryItemsList()
-        if (accessoryItems.isNotEmpty()) {
-            parts.add("소품: ${accessoryItems.joinToString(", ")}")
+        val accessoryItemsText = JsonUtils.toReadableString(accessoryItems)
+        if (accessoryItemsText.isNotBlank()) {
+            parts.add("소품: $accessoryItemsText")
         }
 
         return parts.joinToString(" | ")
@@ -350,14 +346,14 @@ class OutfitRecommendation private constructor(
     }
 
     /**
-     * 레이어링 복잡도 계산
+     * 레이어링 복잡도 계산 - JsonUtils 활용
      */
     fun getLayeringComplexity(): Int {
         var complexity = 1 // 기본 상의+하의
 
         if (hasOuterwearRecommendation()) complexity += 1
         if (hasAccessoryRecommendation()) complexity += 1
-        if (getTopItemsList().size > 1) complexity += 1  // 상의 레이어링
+        if (JsonUtils.getItemCount(topItems) > 1) complexity += 1  // 상의 레이어링
 
         return complexity
     }
@@ -412,5 +408,34 @@ class OutfitRecommendation private constructor(
         }
 
         return areas
+    }
+
+    /**
+     * 특정 아이템 타입이 포함되어 있는지 확인 - JsonUtils 활용
+     */
+    fun containsItemType(itemName: String): Boolean {
+        return JsonUtils.containsItem(topItems, itemName) ||
+                JsonUtils.containsItem(bottomItems, itemName) ||
+                JsonUtils.containsItem(outerItems, itemName) ||
+                JsonUtils.containsItem(accessoryItems, itemName)
+    }
+
+    /**
+     * 모든 추천 아이템을 하나의 리스트로 반환 - JsonUtils 활용
+     */
+    fun getAllRecommendedItems(): List<String> {
+        return JsonUtils.mergeJsonArrays(topItems, bottomItems, outerItems, accessoryItems)
+    }
+
+    /**
+     * 추천 아이템 개수 요약 반환
+     */
+    fun getItemCountSummary(): Map<String, Int> {
+        return mapOf(
+            "상의" to JsonUtils.getItemCount(topItems),
+            "하의" to JsonUtils.getItemCount(bottomItems),
+            "외투" to JsonUtils.getItemCount(outerItems),
+            "소품" to JsonUtils.getItemCount(accessoryItems)
+        )
     }
 }

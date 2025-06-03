@@ -13,13 +13,14 @@ import org.springframework.stereotype.Component
  * fileName       : OutfitItemDatabase
  * author         : MinKyu Park
  * date           : 2025-06-02
- * description    : 아웃핏 아이템 데이터베이스 (카테고리별 실제 의류 아이템 관리)
+ * description    : 아웃핏 아이템 데이터베이스 (NPE 안전성 개선)
  * ===========================================================
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-06-02        MinKyu Park       최초 생성
  * 2025-06-03        MinKyu Park       OutfitRecommendationEngine 연동 강화
  * 2025-06-03        MinKyu Park       WeatherCondition Enum 적용으로 타입 안전성 확보
+ * 2025-06-04        MinKyu Park       NPE 방지를 위한 Safe Call 적용
  */
 @Component
 class OutfitItemDatabase {
@@ -204,7 +205,7 @@ class OutfitItemDatabase {
     }
 
     /**
-     * 🔧 리팩토링: WeatherCondition Enum 적용한 소품 아이템 조회
+     * 🔧 리팩토링: WeatherCondition Enum 적용한 소품 아이템 조회 (NPE 안전성 개선)
      */
     fun getAccessoryItemsForWeather(
         weatherCondition: WeatherCondition,
@@ -227,22 +228,28 @@ class OutfitItemDatabase {
                 accessories.addAll(listOf("털모자", "터치장갑", "목도리", "핫팩"))
             }
             WeatherCondition.PERFECT_WEATHER -> {
-                if (weatherData.uvIndex != null && weatherData.uvIndex!! >= 6.0) {
-                    accessories.addAll(listOf("선글라스", "모자"))
-                } else {
-                    accessories.add("선글라스")
-                }
+                // ✅ Safe call 사용으로 NPE 방지
+                weatherData.uvIndex?.let { uvIndex ->
+                    if (uvIndex >= 6.0) {
+                        accessories.addAll(listOf("선글라스", "모자"))
+                    } else {
+                        accessories.add("선글라스")
+                    }
+                } ?: accessories.add("선글라스")  // uvIndex가 null이면 기본 선글라스만
             }
             WeatherCondition.HUMIDITY_RESISTANT -> {
                 accessories.addAll(listOf("메시 모자", "쿨타월"))
             }
             WeatherCondition.HEAT_EXTREME -> {
                 accessories.addAll(listOf("넓은 모자", "선글라스"))
-                if (weatherData.uvIndex != null && weatherData.uvIndex!! >= 8.0) {
-                    accessories.addAll(listOf("쿨토시", "휴대용 선풍기", "자외선 차단 크림"))
-                } else {
-                    accessories.addAll(listOf("쿨토시", "휴대용 선풍기"))
-                }
+                // ✅ Safe call 사용으로 NPE 방지
+                weatherData.uvIndex?.let { uvIndex ->
+                    if (uvIndex >= 8.0) {
+                        accessories.addAll(listOf("쿨토시", "휴대용 선풍기", "자외선 차단 크림"))
+                    } else {
+                        accessories.addAll(listOf("쿨토시", "휴대용 선풍기"))
+                    }
+                } ?: accessories.addAll(listOf("쿨토시", "휴대용 선풍기"))  // uvIndex가 null이면 기본 아이템
             }
         }
 
@@ -250,7 +257,7 @@ class OutfitItemDatabase {
     }
 
     /**
-     * 소품 아이템 조회 (기본 메서드 유지)
+     * 소품 아이템 조회 (기본 메서드 - NPE 안전성 개선)
      */
     fun getAccessoryItems(
         temperature: Double,
@@ -266,33 +273,39 @@ class OutfitItemDatabase {
             temperature >= 25 -> accessories.addAll(listOf("모자", "선글라스"))
         }
 
-        // 자외선 보호 소품
-        if (weatherData.uvIndex != null && weatherData.uvIndex!! >= 7.0) {
-            accessories.addAll(listOf("챙 넓은 모자", "선글라스", "팔토시"))
+        // ✅ 자외선 보호 소품 - Safe call 사용
+        weatherData.uvIndex?.let { uvIndex ->
+            if (uvIndex >= 7.0) {
+                accessories.addAll(listOf("챙 넓은 모자", "선글라스", "팔토시"))
 
-            // 자외선 민감 사용자 추가 아이템
-            if (preferences.uvWeight >= 70) {
-                accessories.addAll(listOf("자외선 차단 스카프", "UV 차단 장갑"))
+                // 자외선 민감 사용자 추가 아이템
+                if (preferences.uvWeight >= 70) {
+                    accessories.addAll(listOf("자외선 차단 스카프", "UV 차단 장갑"))
+                }
             }
         }
 
-        // 미세먼지 보호
-        if (weatherData.pm25 != null && weatherData.pm25!! >= 75) {
-            accessories.add("마스크")
+        // ✅ 미세먼지 보호 - Safe call 사용
+        weatherData.pm25?.let { pm25 ->
+            if (pm25 >= 75) {
+                accessories.add("마스크")
 
-            // 공기질 민감 사용자 추가 아이템
-            if (preferences.airQualityWeight >= 70) {
-                accessories.addAll(listOf("KF94 마스크", "공기정화 목걸이"))
+                // 공기질 민감 사용자 추가 아이템
+                if (preferences.airQualityWeight >= 70) {
+                    accessories.addAll(listOf("KF94 마스크", "공기정화 목걸이"))
+                }
             }
         }
 
-        // 비 대비
-        if (weatherData.rain1h != null && weatherData.rain1h!! > 0) {
-            accessories.addAll(listOf("우산", "방수 신발"))
+        // ✅ 비 대비 - Safe call 사용
+        weatherData.rain1h?.let { rain1h ->
+            if (rain1h > 0) {
+                accessories.addAll(listOf("우산", "방수 신발"))
 
-            // 강한 비일 경우 추가 아이템
-            if (weatherData.rain1h!! > 5.0) {
-                accessories.addAll(listOf("장우산", "레인부츠", "방수 가방"))
+                // 강한 비일 경우 추가 아이템
+                if (rain1h > 5.0) {
+                    accessories.addAll(listOf("장우산", "레인부츠", "방수 가방"))
+                }
             }
         }
 
@@ -304,7 +317,71 @@ class OutfitItemDatabase {
         return accessories.distinct().take(5) // 최대 5개까지만
     }
 
-    // ===== Private Helper Methods =====
+    // ===== NPE 안전성 개선 헬퍼 메서드들 =====
+
+    /**
+     * UV 지수 기반 자외선 차단 아이템 반환 (Safe call 적용)
+     */
+    private fun getUVProtectionItems(
+        uvIndex: Double?,
+        preferences: WeatherPreference
+    ): List<String> {
+        return uvIndex?.let { uv ->
+            when {
+                uv >= 11.0 -> listOf("챙 넓은 모자", "선글라스", "자외선 차단복", "자외선 차단 크림")
+                uv >= 8.0 -> listOf("모자", "선글라스", "팔토시")
+                uv >= 6.0 -> listOf("모자", "선글라스")
+                uv >= 3.0 -> listOf("선글라스")
+                else -> emptyList()
+            }
+        } ?: emptyList()  // uvIndex가 null이면 빈 리스트
+    }
+
+    /**
+     * 공기질 기반 보호 아이템 반환 (Safe call 적용)
+     */
+    private fun getAirQualityProtectionItems(
+        pm25: Double?,
+        pm10: Double?,
+        preferences: WeatherPreference
+    ): List<String> {
+        val items = mutableListOf<String>()
+
+        pm25?.let { pm25Value ->
+            when {
+                pm25Value >= 150 -> items.addAll(listOf("KF94 마스크", "공기정화 목걸이", "보호안경"))
+                pm25Value >= 75 -> items.addAll(listOf("KF94 마스크", "목걸이"))
+                pm25Value >= 35 -> items.add("마스크")
+            }
+        }
+
+        pm10?.let { pm10Value ->
+            if (pm10Value >= 150 && items.isEmpty()) {
+                items.addAll(listOf("방진 마스크", "보호안경"))
+            }
+        }
+
+        return items
+    }
+
+    /**
+     * 강수량 기반 우비 아이템 반환 (Safe call 적용)
+     */
+    private fun getRainProtectionItems(
+        rain1h: Double?,
+        rain3h: Double?
+    ): List<String> {
+        val rainAmount = rain1h ?: (rain3h?.div(3)) ?: 0.0
+
+        return when {
+            rainAmount >= 10.0 -> listOf("장우산", "레인부츠", "우비", "방수 가방")
+            rainAmount >= 3.0 -> listOf("장우산", "방수 신발", "방수 가방")
+            rainAmount > 0.0 -> listOf("우산", "방수 신발")
+            else -> emptyList()
+        }
+    }
+
+    // ===== 기존 Private Helper Methods =====
 
     /**
      * 개인 선호도 반영 아이템 조정
