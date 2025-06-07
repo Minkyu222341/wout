@@ -9,12 +9,13 @@ import org.hibernate.annotations.Comment
  * fileName       : Member
  * author         : MinKyu Park
  * date           : 2025-06-01
- * description    : 사용자 기본 정보 엔티티 (deviceId 기반 익명 사용자)
+ * description    : 사용자 기본 정보 엔티티 (언더바 제거, 깔끔한 camelCase 적용)
  * ===========================================================
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-05-27        MinKyu Park       최초 생성
  * 2025-06-01        MinKyu Park       개발 가이드에 맞게 수정 (Builder 제거, 팩토리 메서드 사용)
+ * 2025-06-03        MinKyu Park       언더바 제거, QueryDSL 친화적으로 개선
  */
 @Entity
 class Member private constructor(
@@ -29,31 +30,24 @@ class Member private constructor(
 
     @Column(name = "nickname", length = 50)
     @Comment("사용자가 설정한 별명")
-    private var _nickname: String? = null,
+    val nickname: String? = null,
 
     @Column(name = "default_latitude")
     @Comment("기본 위도 (사용자 설정 지역)")
-    private var _defaultLatitude: Double? = null,
+    val defaultLatitude: Double? = null,
 
     @Column(name = "default_longitude")
     @Comment("기본 경도 (사용자 설정 지역)")
-    private var _defaultLongitude: Double? = null,
+    val defaultLongitude: Double? = null,
 
     @Column(name = "default_city_name", length = 100)
     @Comment("기본 지역명 (예: 부산 해운대구)")
-    private var _defaultCityName: String? = null,
+    val defaultCityName: String? = null,
 
     @Column(name = "is_active", nullable = false)
     @Comment("활성 상태 (탈퇴 시 false)")
-    private var _isActive: Boolean = true
+    val isActive: Boolean = true
 ) : BaseTimeEntity() {
-
-    // 읽기 전용 프로퍼티
-    val nickname: String? get() = _nickname
-    val defaultLatitude: Double? get() = _defaultLatitude
-    val defaultLongitude: Double? get() = _defaultLongitude
-    val defaultCityName: String? get() = _defaultCityName
-    val isActive: Boolean get() = _isActive
 
     // JPA용 기본 생성자
     protected constructor() : this(deviceId = "")
@@ -78,10 +72,10 @@ class Member private constructor(
 
             return Member(
                 deviceId = request.deviceId,
-                _nickname = request.nickname,
-                _defaultLatitude = request.latitude,
-                _defaultLongitude = request.longitude,
-                _defaultCityName = request.cityName
+                nickname = request.nickname,
+                defaultLatitude = request.latitude,
+                defaultLongitude = request.longitude,
+                defaultCityName = request.cityName
             )
         }
 
@@ -100,10 +94,10 @@ class Member private constructor(
 
             return Member(
                 deviceId = deviceId,
-                _nickname = nickname,
-                _defaultLatitude = latitude,
-                _defaultLongitude = longitude,
-                _defaultCityName = cityName
+                nickname = nickname,
+                defaultLatitude = latitude,
+                defaultLongitude = longitude,
+                defaultCityName = cityName
             )
         }
 
@@ -130,7 +124,7 @@ class Member private constructor(
         newNickname?.let {
             require(it.length <= 50) { "닉네임은 50자를 초과할 수 없습니다" }
         }
-        return copy(_nickname = newNickname)
+        return copy(nickname = newNickname)
     }
 
     /**
@@ -145,9 +139,9 @@ class Member private constructor(
         validateLocation(latitude, longitude)
 
         return copy(
-            _defaultLatitude = latitude,
-            _defaultLongitude = longitude,
-            _defaultCityName = cityName
+            defaultLatitude = latitude,
+            defaultLongitude = longitude,
+            defaultCityName = cityName
         )
     }
 
@@ -155,7 +149,14 @@ class Member private constructor(
      * 회원 비활성화 (탈퇴)
      */
     fun deactivate(): Member {
-        return copy(_isActive = false)
+        return copy(isActive = false)
+    }
+
+    /**
+     * 회원 재활성화
+     */
+    fun reactivate(): Member {
+        return copy(isActive = true)
     }
 
     // ===== 질의 메서드 =====
@@ -164,21 +165,21 @@ class Member private constructor(
      * 기본 위치가 설정되어 있는지 확인
      */
     fun hasDefaultLocation(): Boolean {
-        return _defaultLatitude != null && _defaultLongitude != null
+        return defaultLatitude != null && defaultLongitude != null
     }
 
     /**
      * 활성 회원인지 확인
      */
     fun isActiveMember(): Boolean {
-        return _isActive
+        return isActive
     }
 
     /**
      * 닉네임이 설정되어 있는지 확인
      */
     fun hasNickname(): Boolean {
-        return !_nickname.isNullOrBlank()
+        return !nickname.isNullOrBlank()
     }
 
     /**
@@ -186,27 +187,41 @@ class Member private constructor(
      */
     fun getLocationPair(): Pair<Double, Double>? {
         return if (hasDefaultLocation()) {
-            Pair(_defaultLatitude!!, _defaultLongitude!!)
+            Pair(defaultLatitude!!, defaultLongitude!!)
         } else null
+    }
+
+    /**
+     * 회원 기본 정보가 모두 설정되어 있는지 확인
+     */
+    fun isProfileCompleted(): Boolean {
+        return hasNickname() && hasDefaultLocation()
+    }
+
+    /**
+     * 익명 사용자인지 확인 (닉네임 없음)
+     */
+    fun isAnonymous(): Boolean {
+        return !hasNickname()
     }
 
     // ===== 불변성 보장을 위한 copy 메서드 =====
 
     private fun copy(
-        _nickname: String? = this._nickname,
-        _defaultLatitude: Double? = this._defaultLatitude,
-        _defaultLongitude: Double? = this._defaultLongitude,
-        _defaultCityName: String? = this._defaultCityName,
-        _isActive: Boolean = this._isActive
+        nickname: String? = this.nickname,
+        defaultLatitude: Double? = this.defaultLatitude,
+        defaultLongitude: Double? = this.defaultLongitude,
+        defaultCityName: String? = this.defaultCityName,
+        isActive: Boolean = this.isActive
     ): Member {
         return Member(
             id = this.id,
             deviceId = this.deviceId,
-            _nickname = _nickname,
-            _defaultLatitude = _defaultLatitude,
-            _defaultLongitude = _defaultLongitude,
-            _defaultCityName = _defaultCityName,
-            _isActive = _isActive
+            nickname = nickname,
+            defaultLatitude = defaultLatitude,
+            defaultLongitude = defaultLongitude,
+            defaultCityName = defaultCityName,
+            isActive = isActive
         )
     }
 }
