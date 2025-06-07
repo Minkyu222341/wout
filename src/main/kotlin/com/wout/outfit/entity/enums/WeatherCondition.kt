@@ -56,7 +56,7 @@ enum class WeatherCondition(
 
                 // 3단계: 습도 조건 - 온도 조건과 독립적, 적정 온도 구간에서만
                 preferences.isHumiditySensitive() &&
-                        weatherData.humidity >= 80 &&
+                        weatherData.humidity >= 85 &&
                         temperature in 16.0..27.9 -> HUMIDITY_RESISTANT
 
                 // 4단계: 기본 조건 - 나머지 모든 경우
@@ -128,7 +128,7 @@ enum class WeatherCondition(
                 preferences.isHeatSensitive() && temperature in 28.0..34.9 ->
                     "더위 민감형: 28-34도 구간, 더위 민감 사용자"
                 preferences.isHumiditySensitive() &&
-                        weatherData.humidity >= 80 &&
+                        weatherData.humidity >= 85 &&
                         temperature in 16.0..27.9 ->
                     "습도 민감형: 16-27도 구간, 습도 ${weatherData.humidity}%, 습도 민감 사용자"
                 else -> "완벽한 날씨: 기본 조건 적용"

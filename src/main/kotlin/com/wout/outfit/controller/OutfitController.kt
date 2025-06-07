@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Positive
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
@@ -60,7 +61,7 @@ class OutfitController(
         @Parameter(description = "디바이스 ID", required = true)
         @PathVariable deviceId: String,
         @Parameter(description = "조회할 추천 개수 (기본: 10개, 최대: 100개)")
-        @RequestParam(defaultValue = "10") @Positive limit: Int
+        @RequestParam(defaultValue = "10") @Positive @Max(100, message = "조회 개수는 최대 100개까지 가능합니다") limit: Int
     ): ApiResponse<List<OutfitRecommendationSummary>> {
         val results = outfitRecommendationService.getRecommendationHistory(deviceId, limit)
         return ApiResponse.success(results)

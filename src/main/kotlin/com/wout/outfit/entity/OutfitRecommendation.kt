@@ -337,7 +337,7 @@ class OutfitRecommendation private constructor(
     /**
      * 종합 적절성 점수 계산 (온도 + 완성도 + 신뢰도)
      */
-    fun calculateOverallAppropriatenesScore(): Double {
+    fun calculateOverallAppropriatenessScore(): Double {
         val temperatureScore = calculateTemperatureAppropriateness()
         val completenessScore = if (isCompleteRecommendation()) 1.0 else 0.8
         val confidenceScore = this.confidenceScore / 100.0
@@ -375,7 +375,7 @@ class OutfitRecommendation private constructor(
      * 추천 품질 등급 반환
      */
     fun getQualityGrade(): String {
-        val score = calculateOverallAppropriatenesScore()
+        val score = calculateOverallAppropriatenessScore()
         return when {
             score >= 0.9 -> "A"
             score >= 0.8 -> "B"
