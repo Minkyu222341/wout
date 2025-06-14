@@ -91,7 +91,7 @@ class OutfitRecommendationEngine(
             uvIndex = weatherData.uvIndex ?: 0.0,
             pm25 = weatherData.pm25 ?: 0.0,
             pm10 = weatherData.pm10 ?: 0.0,
-            weatherPreference = preferences
+            preference = preferences
         )
 
         // 기존 로직 기반 개인 맞춤 팁 생성

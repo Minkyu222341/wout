@@ -1,8 +1,12 @@
 package com.wout.member.controller
 
 import com.wout.common.response.ApiResponse
-import com.wout.member.dto.request.*
+import com.wout.member.dto.request.LocationUpdateRequest
+import com.wout.member.dto.request.NicknameUpdateRequest
+import com.wout.member.dto.request.WeatherPreferenceSetupRequest
+import com.wout.member.dto.request.WeatherPreferenceUpdateRequest
 import com.wout.member.dto.response.MemberResponse
+import com.wout.member.dto.response.MemberStatusResponse
 import com.wout.member.dto.response.MemberWithPreferenceResponse
 import com.wout.member.dto.response.WeatherPreferenceResponse
 import com.wout.member.service.MemberService
@@ -17,94 +21,113 @@ import org.springframework.web.bind.annotation.*
  * packageName    : com.wout.member.controller
  * fileName       : MemberController
  * author         : MinKyu Park
- * date           : 2025-05-27
- * description    : 회원 관련 REST API 엔드포인트
+ * date           : 2025-06-08
+ * description    : 회원 관리 API 컨트롤러 (더티체킹 패턴 적용)
  * ===========================================================
  * DATE              AUTHOR             NOTE
  * -----------------------------------------------------------
  * 2025-05-27        MinKyu Park       최초 생성
- * 2025-05-29        MinKyu Park       닉네임/위치 API 분리
+ * 2025-06-01        MinKyu Park       개발 가이드에 맞게 수정
+ * 2025-06-08        MinKyu Park       더티체킹 패턴 적용
  */
-@Tag(name = "Member API", description = "회원 관리 및 날씨 선호도 설정 API")
 @RestController
 @RequestMapping("/api/members")
+@Tag(name = "Member API", description = "회원 관리 API")
 class MemberController(
     private val memberService: MemberService
 ) {
 
-    /**
-     * 앱 실행 시 기존 사용자 확인 또는 자동 회원가입
-     */
+    // ===== 회원 상태 조회 API (스플래시용) =====
+
     @Operation(
-        summary = "앱 초기화",
-        description = "deviceId로 기존 사용자를 확인하거나 자동으로 회원가입을 진행합니다. 앱 최초 실행 시 호출하는 API입니다."
+        summary = "회원 상태 확인",
+        description = "회원 존재 여부 및 설정 완료 상태를 확인합니다. (스플래시 화면용)"
     )
-    @PostMapping("/init")
-    fun initializeMember(
+    @GetMapping("/status/{deviceId}")
+    fun checkMemberStatus(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @Valid @RequestBody request: MemberCreateRequest
-    ): ApiResponse<MemberWithPreferenceResponse> {
-        val result = memberService.getOrCreateMember(request)
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String
+    ): ApiResponse<MemberStatusResponse> {
+        val result = memberService.checkMemberStatus(deviceId)
         return ApiResponse.success(result)
     }
 
-    /**
-     * 5단계 날씨 선호도 설정 완료
-     */
+    // ===== 회원 생성 + 민감도 설정 API =====
+
     @Operation(
-        summary = "날씨 선호도 설정",
-        description = "5단계 질문을 통한 날씨 선호도 초기 설정을 완료합니다."
+        summary = "민감도 설정과 동시에 회원 생성",
+        description = "신규 사용자의 회원 생성 + 5단계 민감도 설정을 원자적으로 처리합니다."
     )
-    @PostMapping("/{deviceId}/weather-preference")
-    fun setupWeatherPreference(
+    @PostMapping("/{deviceId}/setup-with-preference")
+    fun setupWithPreference(
         @Parameter(description = "디바이스 고유 식별자", required = true)
         @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String,
         @Valid @RequestBody request: WeatherPreferenceSetupRequest
     ): ApiResponse<WeatherPreferenceResponse> {
-        val result = memberService.setupWeatherPreference(deviceId, request)
+        val result = memberService.setupWeatherPreferenceWithMember(deviceId, request)
         return ApiResponse.success(result)
     }
 
-    /**
-     * 날씨 선호도 수정
-     */
+    // ===== 회원 정보 조회 API =====
+
     @Operation(
-        summary = "날씨 선호도 수정",
-        description = "설정된 날씨 선호도를 수정합니다. (마이페이지에서 사용)"
+        summary = "회원 정보 + 민감도 통합 조회",
+        description = "기존 회원의 정보와 날씨 선호도를 함께 조회합니다. (대시보드용)"
     )
-    @PutMapping("/{deviceId}/weather-preference")
-    fun updateWeatherPreference(
+    @GetMapping("/{deviceId}")
+    fun getMemberWithPreference(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String,
-        @Valid @RequestBody request: WeatherPreferenceUpdateRequest
-    ): ApiResponse<WeatherPreferenceResponse> {
-        val result = memberService.updateWeatherPreference(deviceId, request)
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String
+    ): ApiResponse<MemberWithPreferenceResponse> {
+        val result = memberService.getMemberWithPreference(deviceId)
         return ApiResponse.success(result)
     }
 
-    /**
-     * 닉네임 수정
-     */
+    @Operation(
+        summary = "회원 정보 조회",
+        description = "기본 회원 정보만 조회합니다."
+    )
+    @GetMapping("/{deviceId}/info")
+    fun getMemberInfo(
+        @Parameter(description = "디바이스 고유 식별자", required = true)
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String
+    ): ApiResponse<MemberResponse> {
+        val result = memberService.getMemberByDeviceId(deviceId)
+        return ApiResponse.success(result)
+    }
+
+    @Operation(
+        summary = "날씨 선호도 조회",
+        description = "회원의 날씨 선호도 설정을 조회합니다."
+    )
+    @GetMapping("/{deviceId}/weather-preference")
+    fun getWeatherPreference(
+        @Parameter(description = "디바이스 고유 식별자", required = true)
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String
+    ): ApiResponse<WeatherPreferenceResponse> {
+        val result = memberService.getWeatherPreference(deviceId)
+        return ApiResponse.success(result)
+    }
+
+    // ===== 회원 정보 수정 API (✅ 더티체킹 적용) =====
+
     @Operation(
         summary = "닉네임 수정",
-        description = "사용자의 닉네임을 수정합니다."
+        description = "회원의 닉네임을 수정합니다."
     )
     @PatchMapping("/{deviceId}/nickname")
     fun updateNickname(
         @Parameter(description = "디바이스 고유 식별자", required = true)
         @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String,
-        @Valid @RequestBody request: NicknameUpdateRequest
+        request: NicknameUpdateRequest
     ): ApiResponse<MemberResponse> {
         val result = memberService.updateNickname(deviceId, request.nickname)
         return ApiResponse.success(result)
     }
 
-    /**
-     * 기본 위치 정보 수정
-     */
     @Operation(
         summary = "기본 위치 정보 수정",
-        description = "사용자의 기본 위치 정보(위도, 경도, 지역명)를 수정합니다."
+        description = "회원의 기본 위치 정보를 수정합니다."
     )
     @PatchMapping("/{deviceId}/location")
     fun updateLocation(
@@ -116,29 +139,27 @@ class MemberController(
         return ApiResponse.success(result)
     }
 
-    /**
-     * 5단계 설정 완료 여부 확인
-     */
+    // ===== 날씨 선호도 수정 API (✅ 더티체킹 적용) =====
+
     @Operation(
-        summary = "설정 완료 여부 확인",
-        description = "5단계 날씨 선호도 설정이 완료되었는지 확인합니다."
+        summary = "날씨 선호도 수정",
+        description = "기존 회원의 날씨 선호도를 수정합니다. (마이페이지 → 민감도 재조정용)"
     )
-    @GetMapping("/{deviceId}/weather-preference/status")
-    fun checkSetupStatus(
+    @PutMapping("/{deviceId}/weather-preference")
+    fun updateWeatherPreference(
         @Parameter(description = "디바이스 고유 식별자", required = true)
-        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String
-    ): ApiResponse<Map<String, Boolean>> {
-        val isCompleted = memberService.isWeatherPreferenceSetupCompleted(deviceId)
-        val result = mapOf("isSetupCompleted" to isCompleted)
+        @PathVariable @NotBlank(message = "Device ID는 필수입니다") deviceId: String,
+        @Valid @RequestBody request: WeatherPreferenceUpdateRequest
+    ): ApiResponse<WeatherPreferenceResponse> {
+        val result = memberService.updateWeatherPreference(deviceId, request)
         return ApiResponse.success(result)
     }
 
-    /**
-     * 회원 탈퇴 (계정 비활성화)
-     */
+    // ===== 회원 탈퇴 API (✅ 더티체킹 적용) =====
+
     @Operation(
         summary = "회원 탈퇴",
-        description = "회원 계정을 비활성화합니다. (완전 삭제가 아닌 비활성화 처리)"
+        description = "회원 계정을 비활성화합니다."
     )
     @DeleteMapping("/{deviceId}")
     fun deactivateMember(

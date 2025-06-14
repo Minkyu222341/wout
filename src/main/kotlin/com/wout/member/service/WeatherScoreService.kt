@@ -165,7 +165,7 @@ class WeatherScoreService(
                 uvIndex = weatherData.uvIndex ?: 0.0,
                 pm25 = weatherData.pm25 ?: 0.0,
                 pm10 = weatherData.pm10 ?: 0.0,
-                weatherPreference = weatherPreference
+                preference = weatherPreference
             )
         } catch (e: Exception) {
             throw ApiException(INTERNAL_SERVER_ERROR)
